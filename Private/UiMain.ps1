@@ -63,9 +63,12 @@ function Register-TbmMainWindowEvents {
     $c.BtnBrowse.Add_Click({ Invoke-TbmUiAction -Name 'Open spreadsheet' -Action { Select-TbmRecipientFile } })
     $c.BtnReload.Add_Click({
             Invoke-TbmUiAction -Name 'Reload' -Action {
-                if ($null -ne $script:TbmUi.SourceFile) { Import-TbmUiRecipients -Path $script:TbmUi.SourceFile -SheetName $script:TbmUi.SheetName }
+                if ($null -eq $script:TbmUi.SourceFile) { return }
+                if ($script:TbmUi.ManualCount -gt 0 -and -not (Confirm-TbmAction -Text ('Reloading the file removes the {0} recipient(s) you added manually. Continue?' -f $script:TbmUi.ManualCount) -Icon ([System.Windows.MessageBoxImage]::Warning))) { return }
+                Import-TbmUiRecipients -Path $script:TbmUi.SourceFile -SheetName $script:TbmUi.SheetName
             }
         })
+    $c.BtnAddManual.Add_Click({ Invoke-TbmUiAction -Name 'Add recipients manually' -Action { Add-TbmManualRecipientsFromUi } })
     $c.CmbSheet.Add_SelectionChanged({
             Invoke-TbmUiAction -Name 'Change sheet' -Action {
                 if ($script:TbmUi.Suppress -or $null -eq $script:TbmUi.SourceFile) { return }
@@ -290,17 +293,53 @@ function Import-TbmUiRecipients {
         $ui.Window.Cursor = $null
     }
 
-    $ui.Table = $result.Table
     $ui.SourceFile = $Path
     $ui.SheetName = $result.SheetName
-    $ui.ColumnNames = Get-TbmDataColumnNames -Table $result.Table
-    $ui.RecipientColumn = Find-TbmRecipientColumn -Table $result.Table
     $ui.Settings.LastFolder = [System.IO.Path]::GetDirectoryName($Path)
+    Set-TbmUiRecipientTable -Table $result.Table -RecipientColumn (Find-TbmRecipientColumn -Table $result.Table) -Sheets $result.Sheets -SheetName $result.SheetName -SourceLabel $Path
+
+    if ($null -eq $ui.RecipientColumn) {
+        [void](Show-TbmMessageBox -Text 'No email column was recognised. Choose the column that holds Teams email addresses under "Recipient column".' -Icon ([System.Windows.MessageBoxImage]::Warning))
+    }
+}
+
+function Set-TbmUiRecipientTable {
+    <#
+    .SYNOPSIS
+        Makes a recipient table (imported or manual) the current list and refreshes the grid, tokens and preview.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNull()]
+        [System.Data.DataTable]$Table,
+
+        [Parameter()]
+        [string]$RecipientColumn,
+
+        [Parameter()]
+        [string[]]$Sheets,
+
+        [Parameter()]
+        [string]$SheetName,
+
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$SourceLabel
+    )
+
+    $ui = $script:TbmUi
+    $ui.Table = $Table
+    $ui.ColumnNames = Get-TbmDataColumnNames -Table $Table
+    $ui.RecipientColumn = $null
+    if (-not [string]::IsNullOrEmpty($RecipientColumn)) { $ui.RecipientColumn = $RecipientColumn }
+    $ui.SourceLabel = $SourceLabel
+    $ui.ManualCount = 0
 
     Invoke-TbmSuppressed {
         $controls = $script:TbmUi.C
-        $controls.CmbSheet.ItemsSource = $result.Sheets
-        $controls.CmbSheet.SelectedItem = $result.SheetName
+        $controls.CmbSheet.ItemsSource = $Sheets
+        $controls.CmbSheet.SelectedItem = $SheetName
         $controls.CmbRecipientColumn.ItemsSource = $script:TbmUi.ColumnNames
         $controls.CmbRecipientColumn.SelectedItem = $script:TbmUi.RecipientColumn
         if ($null -ne $script:TbmUi.RecipientColumn) {
@@ -310,21 +349,60 @@ function Import-TbmUiRecipients {
         $controls.GridRecipients.ItemsSource = $script:TbmUi.Table.DefaultView
     }
 
-    $ui.Table.Add_ColumnChanged({
+    $Table.Add_ColumnChanged({
             param($source, $changeArgs)
             if (-not $script:TbmUi.Suppress -and $changeArgs.Column.ColumnName -eq $script:TbmIncludeColumn) { Update-TbmRecipientSummary }
         })
 
-    $ui.C.TxtFile.Text = $Path
+    $ui.C.TxtFile.Text = $SourceLabel
     $ui.C.TxtFile.ClearValue([System.Windows.Controls.Control]::ForegroundProperty)
     Update-TbmFileControls
     Update-TbmRecipientSummary
     Update-TbmTokenList
     Update-TbmPreview
+}
 
-    if ($null -eq $ui.RecipientColumn) {
-        [void](Show-TbmMessageBox -Text 'No email column was recognised. Choose the column that holds Teams email addresses under "Recipient column".' -Icon ([System.Windows.MessageBoxImage]::Warning))
+function Add-TbmManualRecipientsFromUi {
+    <#
+    .SYNOPSIS
+        Opens the manual entry dialog and adds the people to the current list, or starts a new list.
+    #>
+    [CmdletBinding()]
+    param()
+
+    $ui = $script:TbmUi
+    $hasList = $null -ne $ui.Table -and $null -ne $ui.RecipientColumn
+    $choice = Show-TbmManualRecipientsWindow -Owner $ui.Window -AuthState $ui.AuthState -HasList $hasList
+    if ($null -eq $choice) { return }
+
+    if ($choice.Replace -or -not $hasList) {
+        if ($null -ne $ui.Table -and $ui.Table.Rows.Count -gt 0 -and -not (Confirm-TbmAction -Text 'Replace the current recipient list with the people you entered?')) { return }
+        $result = Add-TbmManualEntriesToTable -Entries $choice.Entries
+        $ui.SourceFile = $null
+        $ui.SheetName = $null
+        Set-TbmUiRecipientTable -Table $result.Table -RecipientColumn $result.RecipientColumn -SourceLabel ('Entered manually ({0})' -f $result.Added)
+        $ui.ManualCount = $result.Added
+        return
     }
+
+    [void]$ui.C.GridRecipients.CommitEdit()
+    $previous = $ui.Suppress
+    $ui.Suppress = $true
+    try {
+        $result = Add-TbmManualEntriesToTable -Entries $choice.Entries -Table $ui.Table -RecipientColumn $ui.RecipientColumn
+        [void](Update-TbmRecipientValidation -Table $ui.Table -RecipientColumn $ui.RecipientColumn)
+    }
+    finally {
+        $ui.Suppress = $previous
+    }
+    $ui.ManualCount += $result.Added
+    $baseLabel = $ui.SourceFile
+    if ([string]::IsNullOrEmpty($baseLabel)) { $baseLabel = 'Entered manually' }
+    $ui.SourceLabel = '{0} + {1} added manually' -f $baseLabel, $ui.ManualCount
+    $ui.C.TxtFile.Text = $ui.SourceLabel
+    Update-TbmRecipientSummary
+    Update-TbmPreview
+    $ui.C.GridRecipients.ScrollIntoView($ui.Table.DefaultView[$ui.Table.DefaultView.Count - 1])
 }
 
 function Set-TbmGeneratedColumn {
@@ -377,7 +455,8 @@ function Update-TbmFileControls {
     param()
     $ui = $script:TbmUi
     $loaded = $null -ne $ui.Table -and -not $ui.Busy
-    $ui.C.BtnReload.IsEnabled = $loaded
+    $ui.C.BtnReload.IsEnabled = $loaded -and $null -ne $ui.SourceFile
+    $ui.C.BtnAddManual.IsEnabled = -not $ui.Busy
     $ui.C.CmbRecipientColumn.IsEnabled = $loaded
     $ui.C.BtnSelectAll.IsEnabled = $loaded
     $ui.C.BtnSelectNone.IsEnabled = $loaded
@@ -410,7 +489,7 @@ function Update-TbmRecipientSummary {
     [CmdletBinding()]
     param()
     $ui = $script:TbmUi
-    if ($null -eq $ui.Table) { $ui.C.TxtRecipientSummary.Text = 'No file loaded.'; return }
+    if ($null -eq $ui.Table) { $ui.C.TxtRecipientSummary.Text = 'No recipients yet. Import a CSV or Excel file (recommended), or use Add manually.'; return }
     $selected = 0; $invalid = 0; $duplicates = 0
     foreach ($row in $ui.Table.Rows) {
         if ([bool]$row[$script:TbmIncludeColumn]) { $selected++ }
@@ -625,7 +704,7 @@ function New-TbmSendPlan {
         $sources.Add($TestRow)
     }
     else {
-        if ($null -eq $ui.Table) { throw [System.InvalidOperationException]::new('Load a recipient spreadsheet first.') }
+        if ($null -eq $ui.Table) { throw [System.InvalidOperationException]::new('Import a recipient spreadsheet (or add people manually) first.') }
         if ($null -eq $ui.RecipientColumn) { throw [System.InvalidOperationException]::new('Choose the recipient (email) column first.') }
         foreach ($row in (Get-TbmIncludedRows)) { $sources.Add($row) }
         if ($sources.Count -eq 0) { throw [System.InvalidOperationException]::new('Tick at least one recipient with a valid email address.') }
@@ -648,7 +727,7 @@ function New-TbmSendPlan {
     $blast.Transport = $transport
     $blast.Template = $template
     $blast.Format = $format
-    $blast.SourceFile = [string]$ui.SourceFile
+    $blast.SourceFile = [string]$ui.SourceLabel
     $blast.IsTest = [bool]$IsTest
     if ($mode -eq 'Group') { $blast.Topic = $ui.C.TxtTopic.Text.Trim() }
     if ($transport -like 'Graph*') {

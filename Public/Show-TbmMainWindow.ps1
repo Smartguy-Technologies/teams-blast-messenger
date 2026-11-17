@@ -27,6 +27,8 @@
         AuthState       = New-TbmAuthState
         Table           = $null
         SourceFile      = $null
+        SourceLabel     = ''
+        ManualCount     = 0
         SheetName       = $null
         ColumnNames     = [string[]]@()
         RecipientColumn = $null

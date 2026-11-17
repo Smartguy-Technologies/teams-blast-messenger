@@ -196,6 +196,20 @@ namespace TeamsBlastMessenger
         public string StatusText { get { return Status.ToString(); } }
     }
 
+    /// <summary>One typed/pasted recipient in the "Add recipients" dialog.</summary>
+    public sealed class TbmManualEntry
+    {
+        public string Raw { get; set; }
+        public string Name { get; set; }
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+        public string Email { get; set; }
+        /// <summary>OK, Invalid email, Duplicate, Not found, Ambiguous, Needs email.</summary>
+        public string Status { get; set; }
+        public string Detail { get; set; }
+        public bool IsValid { get { return Status == "OK"; } }
+    }
+
     public sealed class TbmReplyMessage
     {
         public string MessageId { get; set; }

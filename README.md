@@ -23,7 +23,7 @@ It also keeps a **send history** and tracks **interactions**: who replied, what 
      powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File .\Start-TeamsBlastMessenger.ps1
      ```
 
-3. Click **Browse…** and load a CSV or Excel file. `sample-recipients.csv` shows the layout.
+3. Click **Import CSV / Excel…** and load your recipient spreadsheet (recommended; `sample-recipients.csv` shows the layout). To type or paste a few people instead, or to add people to an imported list, use **Add manually…**.
 4. Write the message using `{Column Name}` tokens. Double-click a token chip to insert it.
 5. Check the **Preview**. Click a row to preview that person's message.
 6. Run **Dry run** to check for problems, then use **Test send** and **Send**.
@@ -104,6 +104,30 @@ Before sending, the tool checks the message:
 * **XLS**, or a workbook the native reader can't handle, goes through the `ImportExcel` module if it is installed, otherwise Excel itself (COM).
 
 The first non-blank row is the header. The recipient column is auto-detected from headers such as Email, Mail, UPN or UserPrincipalName, and you can change it.
+
+## Adding people manually
+
+Importing a spreadsheet is the recommended way to send, because it gives you columns for personalization. For a few extra people, or a quick send without a file, use **Add manually…**. Type or paste one person per line; semicolons, or commas between addresses, work too:
+
+```
+jane@contoso.com
+Jane Doe <jane@contoso.com>
+Doe, Jane <jane@contoso.com>
+jane@contoso.com (Jane Doe)
+Jane Doe<TAB>jane@contoso.com        cells copied from Excel (a "Name / Email" header row is ignored)
+Jane Doe                             name only: looked up in your directory when Graph is connected
+```
+
+Click **Check** to review the list before adding it.
+
+* Invalid addresses, duplicates, names with no match and names with several matches are highlighted and left out.
+* By default the people are **added to the current list**:
+  * Their email goes in the recipient column.
+  * Their first, last and full name go into matching columns if the spreadsheet has them (for example *First Name*, *Given Name*, *Surname*, *Name*).
+  * Other columns stay blank, so add a fallback such as `{Department|your team}` where needed.
+* **Start a new list** creates a list with the columns *Email, Name, First Name, Last Name*, so `{First Name}` works straight away.
+* **Reload** re-reads the file and asks before it drops people you added manually.
+* History records the source, for example *"people.xlsx + 3 added manually"*.
 
 ## History
 

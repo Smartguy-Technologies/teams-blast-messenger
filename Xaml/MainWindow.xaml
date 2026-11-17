@@ -1,4 +1,4 @@
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+﻿<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Teams Blast Messenger" Height="860" Width="1360" MinHeight="660" MinWidth="1080"
         WindowStartupLocation="CenterScreen" Background="#F5F6FA" FontFamily="Segoe UI" FontSize="13">
@@ -85,10 +85,11 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBox Name="TxtFile" IsReadOnly="True" Text="Choose a CSV or Excel file…" Foreground="#616673"/>
+                        <TextBox Name="TxtFile" IsReadOnly="True" Text="Import a CSV or Excel file (recommended)…" Foreground="#616673"/>
                         <StackPanel Grid.Column="1" Orientation="Horizontal">
-                            <Button Name="BtnBrowse" Content="Browse…"/>
+                            <Button Name="BtnBrowse" Content="Import CSV / Excel…" Style="{StaticResource PrimaryButton}" ToolTip="Recommended: load recipients and personalization columns from a spreadsheet"/>
                             <Button Name="BtnReload" Content="Reload" IsEnabled="False"/>
+                            <Button Name="BtnAddManual" Content="Add manually…" ToolTip="Type or paste names and email addresses (added to the current list or as a new list)"/>
                         </StackPanel>
                     </Grid>
                     <WrapPanel Grid.Row="2" Margin="0,8,0,0">
@@ -99,7 +100,7 @@
                         <Button Name="BtnSelectAll" Content="Select valid" IsEnabled="False"/>
                         <Button Name="BtnSelectNone" Content="Select none" IsEnabled="False"/>
                     </WrapPanel>
-                    <TextBlock Grid.Row="3" Name="TxtRecipientSummary" Style="{StaticResource Muted}" Margin="0,8,0,6" Text="No file loaded."/>
+                    <TextBlock Grid.Row="3" Name="TxtRecipientSummary" Style="{StaticResource Muted}" Margin="0,8,0,6" Text="No recipients yet. Import a CSV or Excel file (recommended), or use Add manually."/>
                     <DataGrid Grid.Row="4" Name="GridRecipients" AutoGenerateColumns="True" CanUserSortColumns="True">
                         <DataGrid.RowStyle>
                             <Style TargetType="DataGridRow">

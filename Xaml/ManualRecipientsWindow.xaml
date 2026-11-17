@@ -1,0 +1,60 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Add recipients manually – Teams Blast Messenger" Height="640" Width="760" MinHeight="460" MinWidth="560"
+        WindowStartupLocation="CenterOwner" Background="#F5F6FA" FontFamily="Segoe UI" FontSize="13">
+    <DockPanel Margin="6">
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="6">
+            <Button Name="BtnCancel" Content="Cancel" IsCancel="True"/>
+            <Button Name="BtnAdd" Content="Add recipients" Style="{StaticResource PrimaryButton}" IsEnabled="False" IsDefault="True"/>
+        </StackPanel>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="2*"/>
+                <RowDefinition Height="3*"/>
+            </Grid.RowDefinitions>
+            <Border Style="{StaticResource Card}">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Type or paste people" Style="{StaticResource CardTitle}"/>
+                    <TextBlock DockPanel.Dock="Top" Style="{StaticResource Muted}" Margin="0,0,0,8" FontSize="12"
+                               Text="One per line, or separated by ; or commas. Examples: jane@contoso.com · Jane Doe &lt;jane@contoso.com&gt; · Doe, Jane &lt;jane@contoso.com&gt; · name and email cells copied from Excel · a name on its own (looked up in your directory). For large lists, importing a CSV or Excel file is recommended."/>
+                    <Grid DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <WrapPanel VerticalAlignment="Center">
+                            <CheckBox Name="ChkLookup" Content="Look up names without an email (Graph)" Margin="0,0,16,0" VerticalAlignment="Center"/>
+                            <RadioButton Name="RadAppend" Content="Add to current list" IsChecked="True" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                            <RadioButton Name="RadReplace" Content="Start a new list" VerticalAlignment="Center"/>
+                        </WrapPanel>
+                        <Button Grid.Column="1" Name="BtnCheck" Content="Check"/>
+                    </Grid>
+                    <TextBox Name="TxtInput" AcceptsReturn="True" AcceptsTab="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontSize="13"/>
+                </DockPanel>
+            </Border>
+            <Border Grid.Row="1" Style="{StaticResource Card}">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Name="TxtSummary" Style="{StaticResource Muted}" Margin="0,0,0,6" Text="Click Check to review the entries before adding them."/>
+                    <DataGrid Name="GridEntries" IsReadOnly="True">
+                        <DataGrid.RowStyle>
+                            <Style TargetType="DataGridRow">
+                                <Setter Property="Background" Value="#FFF4E0"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsValid}" Value="True">
+                                        <Setter Property="Background" Value="White"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </DataGrid.RowStyle>
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="170"/>
+                            <DataGridTextColumn Header="Email" Binding="{Binding Email}" Width="220"/>
+                            <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="95"/>
+                            <DataGridTextColumn Header="Detail" Binding="{Binding Detail}" Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </DockPanel>
+</Window>

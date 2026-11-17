@@ -57,7 +57,7 @@ function Get-TbmXamlWindow {
     [OutputType([hashtable])]
     param(
         [Parameter(Mandatory)]
-        [ValidateSet('MainWindow', 'HistoryWindow', 'InteractionsWindow', 'SettingsWindow', 'DeviceCodeWindow')]
+        [ValidateSet('MainWindow', 'HistoryWindow', 'InteractionsWindow', 'SettingsWindow', 'DeviceCodeWindow', 'ManualRecipientsWindow')]
         [string]$Name,
 
         [Parameter()]
@@ -447,6 +447,79 @@ function Show-TbmDeviceCodeWindow {
     $deviceView.Timer.Start()
     [void]$ui.Window.ShowDialog()
     return [bool]$deviceView.Success
+}
+
+#endregion
+
+#region Manual recipients dialog
+
+function Show-TbmManualRecipientsWindow {
+    <#
+    .SYNOPSIS
+        Lets the user type or paste recipients. Returns @{ Entries; Replace } for the valid entries, or $null if cancelled.
+    #>
+    [CmdletBinding()]
+    [OutputType([hashtable])]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNull()]
+        [System.Windows.Window]$Owner,
+
+        [Parameter(Mandatory)]
+        [ValidateNotNull()]
+        [hashtable]$AuthState,
+
+        [Parameter()]
+        [bool]$HasList = $false
+    )
+
+    $ui = Get-TbmXamlWindow -Name 'ManualRecipientsWindow' -Owner $Owner
+    $manualView = @{ Ui = $ui; AuthState = $AuthState; Entries = $null; Result = $null }
+    $c = $ui.Controls
+
+    $connected = Test-TbmGraphConnected -AuthState $AuthState
+    $c.ChkLookup.IsEnabled = $connected
+    $c.ChkLookup.IsChecked = $connected
+    if (-not $connected) { $c.ChkLookup.ToolTip = 'Connect to Microsoft Graph to look up people by name.' }
+    if (-not $HasList) {
+        $c.RadAppend.IsEnabled = $false
+        $c.RadReplace.IsChecked = $true
+    }
+
+    $c.TxtInput.Add_TextChanged({
+            $manualView.Entries = $null
+            $manualView.Ui.Controls.BtnAdd.IsEnabled = $false
+            $manualView.Ui.Controls.BtnAdd.Content = 'Add recipients'
+        })
+    $c.BtnCheck.Add_Click({
+            Invoke-TbmUiAction -Name 'Check recipients' -Action {
+                $controls = $manualView.Ui.Controls
+                $entries = ConvertFrom-TbmManualRecipientText -Text $controls.TxtInput.Text
+                if ([bool]$controls.ChkLookup.IsChecked -and (Test-TbmGraphConnected -AuthState $manualView.AuthState)) {
+                    $manualView.Ui.Window.Cursor = [System.Windows.Input.Cursors]::Wait
+                    try { Resolve-TbmManualEntryNames -AuthState $manualView.AuthState -Entries $entries }
+                    finally { $manualView.Ui.Window.Cursor = $null }
+                }
+                $valid = 0
+                foreach ($entry in $entries) { if ($entry.IsValid) { $valid++ } }
+                $manualView.Entries = $entries
+                $controls.GridEntries.ItemsSource = $null
+                $controls.GridEntries.ItemsSource = $entries
+                $controls.TxtSummary.Text = '{0} entr(ies) found · {1} ready to add · {2} need attention (highlighted; they will not be added).' -f $entries.Count, $valid, ($entries.Count - $valid)
+                $controls.BtnAdd.IsEnabled = $valid -gt 0
+                $controls.BtnAdd.Content = 'Add {0} recipient(s)' -f $valid
+            }
+        })
+    $c.BtnAdd.Add_Click({
+            Invoke-TbmUiAction -Name 'Add recipients' -Action {
+                if ($null -eq $manualView.Entries) { return }
+                $manualView.Result = @{ Entries = $manualView.Entries; Replace = [bool]$manualView.Ui.Controls.RadReplace.IsChecked }
+                $manualView.Ui.Window.DialogResult = $true
+            }
+        })
+    $ui.Window.Add_Loaded({ [void]$manualView.Ui.Controls.TxtInput.Focus() })
+    [void]$ui.Window.ShowDialog()
+    return $manualView.Result
 }
 
 #endregion

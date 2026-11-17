@@ -151,6 +151,73 @@ Describe 'Recipient files' {
     }
 }
 
+Describe 'Manually entered recipients' {
+    It 'parses emails, display-name forms, Excel cells, multiple per line and flags problems' {
+        InModuleScope TeamsBlastMessenger {
+            $text = @(
+                'ana@contoso.com',
+                'Bob Stone <bob@contoso.com>, "Lee, Cara" <cara@contoso.com>',
+                "Name`tEmail",
+                "Dan Fox`tdan@contoso.com",
+                'eve@contoso.com (Eve Moss); fay@contoso',
+                'BOB@contoso.com',
+                'Gil Hart'
+            ) -join "`r`n"
+            $entries = ConvertFrom-TbmManualRecipientText -Text $text
+            $entries.Count | Should -Be 8
+            $entries[0].Email | Should -Be 'ana@contoso.com'; $entries[0].Status | Should -Be 'OK'; $entries[0].Name | Should -Be ''
+            $entries[1].Name | Should -Be 'Bob Stone'; $entries[1].FirstName | Should -Be 'Bob'; $entries[1].LastName | Should -Be 'Stone'
+            $entries[2].Email | Should -Be 'cara@contoso.com'; $entries[2].Name | Should -Be 'Cara Lee'; $entries[2].LastName | Should -Be 'Lee'
+            $entries[3].Name | Should -Be 'Dan Fox'; $entries[3].Email | Should -Be 'dan@contoso.com'
+            $entries[4].Name | Should -Be 'Eve Moss'
+            $entries[5].Status | Should -Be 'Invalid email'
+            $entries[6].Status | Should -Be 'Duplicate'
+            $entries[7].Status | Should -Be 'Needs email'; $entries[7].FirstName | Should -Be 'Gil'
+        }
+    }
+
+    It 'looks up name-only entries: one match fills the email, several are ambiguous, none is not found' {
+        InModuleScope TeamsBlastMessenger {
+            Mock Invoke-TbmGraphRequest {
+                if ($Path -match 'Gil%20Hart') { return [pscustomobject]@{ value = @([pscustomobject]@{ displayName = 'Gil Hart'; mail = 'gil@contoso.com'; userPrincipalName = 'gil@contoso.com' }) } }
+                if ($Path -match 'filter' -and $Path -match 'Sam') { return [pscustomobject]@{ value = @() } }
+                if ($Path -match 'search' -and $Path -match 'Sam') { return [pscustomobject]@{ value = @([pscustomobject]@{ displayName = 'Sam A'; mail = 'sa@contoso.com' }, [pscustomobject]@{ displayName = 'Sam B'; mail = $null; userPrincipalName = 'sb@contoso.com' }) } }
+                return [pscustomobject]@{ value = @() }
+            }
+            $entries = ConvertFrom-TbmManualRecipientText -Text "Gil Hart`nSam`nNobody Here"
+            $auth = New-TbmAuthState; $auth.Mode = 'GraphRest'; $auth.MeId = 'me'
+            Resolve-TbmManualEntryNames -AuthState $auth -Entries $entries
+            $entries[0].Status | Should -Be 'OK'; $entries[0].Email | Should -Be 'gil@contoso.com'
+            $entries[1].Status | Should -Be 'Ambiguous'; $entries[1].Detail | Should -Match 'sb@contoso.com'
+            $entries[2].Status | Should -Be 'Not found'
+            Should -Invoke Invoke-TbmGraphRequest -ParameterFilter { $Headers -and $Headers.ConsistencyLevel -eq 'eventual' }
+        }
+    }
+
+    It 'builds a new list, or appends to an imported one filling matching name columns' {
+        InModuleScope TeamsBlastMessenger -Parameters @{ Root = $script:TestRoot } {
+            param($Root)
+            $entries = ConvertFrom-TbmManualRecipientText -Text "Jane Doe <jane@x.com>`nbad@`nkim@x.com"
+            $new = Add-TbmManualEntriesToTable -Entries $entries
+            $new.Added | Should -Be 2
+            $new.RecipientColumn | Should -Be 'Email'
+            (Get-TbmDataColumnNames -Table $new.Table) | Should -Be @('Email', 'Name', 'First Name', 'Last Name')
+            $new.Table.Rows[0]['First Name'] | Should -Be 'Jane'
+            [bool]$new.Table.Rows[1][$script:TbmIncludeColumn] | Should -BeTrue
+
+            $path = [System.IO.Path]::Combine($Root, 'base.csv')
+            [System.IO.File]::WriteAllText($path, "Work Email,Given Name,Surname,Dept`nold@x.com,Old,Timer,IT`n")
+            $table = (Import-TbmRecipientFile -Path $path).Table
+            $appended = Add-TbmManualEntriesToTable -Entries $entries -Table $table -RecipientColumn 'Work Email'
+            $appended.Table.Rows.Count | Should -Be 3
+            $appended.Table.Rows[1]['Work Email'] | Should -Be 'jane@x.com'
+            $appended.Table.Rows[1]['Given Name'] | Should -Be 'Jane'
+            $appended.Table.Rows[1]['Surname'] | Should -Be 'Doe'
+            $appended.Table.Rows[1]['Dept'] | Should -Be ''
+        }
+    }
+}
+
 Describe 'Deep links' {
     It 'encodes users, topic and message' {
         InModuleScope TeamsBlastMessenger {
