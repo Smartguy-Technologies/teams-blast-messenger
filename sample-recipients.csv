@@ -1,0 +1,6 @@
+Email,First Name,Last Name,Department,Due Date,Manager
+adele.vance@contoso.com,Adele,Vance,Finance,2026-12-01,Megan Bowen
+alex.wilber@contoso.com,Alex,Wilber,Marketing,2026-12-03,
+"diego.siciliani@contoso.com",Diego,Siciliani,"Sales, East",2026-12-05,Megan Bowen
+not-an-email,Broken,Row,IT,2026-12-07,
+adele.vance@contoso.com,Adele,Duplicate,Finance,2026-12-01,

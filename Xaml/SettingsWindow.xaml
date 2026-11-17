@@ -1,0 +1,97 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Settings – Teams Blast Messenger" Width="640" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" Background="#F5F6FA" FontFamily="Segoe UI" FontSize="13">
+    <StackPanel Margin="6">
+        <Border Style="{StaticResource Card}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="190"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <TextBlock Grid.ColumnSpan="2" Text="Microsoft Graph" Style="{StaticResource CardTitle}"/>
+                <TextBlock Grid.Row="1" Text="Sign-in method" VerticalAlignment="Center"/>
+                <ComboBox Grid.Row="1" Grid.Column="1" Name="CmbAuthMode" Margin="0,3">
+                    <ComboBoxItem Tag="Auto" Content="Auto (app registration if set, else Graph SDK)"/>
+                    <ComboBoxItem Tag="GraphSdk" Content="Microsoft Graph PowerShell SDK"/>
+                    <ComboBoxItem Tag="GraphRest" Content="App registration (device code)"/>
+                </ComboBox>
+                <TextBlock Grid.Row="2" Text="Client (application) ID" VerticalAlignment="Center"/>
+                <TextBox Grid.Row="2" Grid.Column="1" Name="TxtClientId" Margin="0,3"/>
+                <TextBlock Grid.Row="3" Text="Tenant ID or domain" VerticalAlignment="Center"/>
+                <TextBox Grid.Row="3" Grid.Column="1" Name="TxtTenantId" Margin="0,3"/>
+                <TextBlock Grid.Row="4" Grid.ColumnSpan="2" Name="TxtGraphInfo" Style="{StaticResource Muted}" Margin="0,6,0,0" FontSize="12"/>
+            </Grid>
+        </Border>
+        <Border Style="{StaticResource Card}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="190"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <TextBlock Grid.ColumnSpan="2" Text="Sending" Style="{StaticResource CardTitle}"/>
+                <TextBlock Grid.Row="1" Text="Delay between messages (ms)" VerticalAlignment="Center"/>
+                <TextBox Grid.Row="1" Grid.Column="1" Name="TxtPacing" Width="100" HorizontalAlignment="Left" Margin="0,3"/>
+                <TextBlock Grid.Row="2" Text="Test recipient" VerticalAlignment="Center"/>
+                <TextBox Grid.Row="2" Grid.Column="1" Name="TxtTestRecipient" Margin="0,3" ToolTip="Leave blank to send tests to yourself (requires Graph)"/>
+                <TextBlock Grid.Row="3" Text="Deep links open in" VerticalAlignment="Center"/>
+                <ComboBox Grid.Row="3" Grid.Column="1" Name="CmbDeepLinkTarget" Width="220" HorizontalAlignment="Left" Margin="0,3">
+                    <ComboBoxItem Tag="Desktop" Content="Teams desktop app"/>
+                    <ComboBoxItem Tag="Web" Content="Browser (Teams web)"/>
+                </ComboBox>
+                <TextBlock Grid.Row="4" Text="Auto-send wait (seconds)" VerticalAlignment="Center"/>
+                <TextBox Grid.Row="4" Grid.Column="1" Name="TxtDeepLinkDelay" Width="100" HorizontalAlignment="Left" Margin="0,3" ToolTip="Time for Teams to open the chat before Enter is pressed"/>
+                <TextBlock Grid.Row="5" Text="Max deep-link length" VerticalAlignment="Center"/>
+                <TextBox Grid.Row="5" Grid.Column="1" Name="TxtMaxUrl" Width="100" HorizontalAlignment="Left" Margin="0,3"/>
+            </Grid>
+        </Border>
+        <Border Style="{StaticResource Card}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="190"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <TextBlock Grid.ColumnSpan="2" Text="Logging and tracking" Style="{StaticResource CardTitle}"/>
+                <TextBlock Grid.Row="1" Text="Log level" VerticalAlignment="Center"/>
+                <ComboBox Grid.Row="1" Grid.Column="1" Name="CmbLogLevel" Width="120" HorizontalAlignment="Left" Margin="0,3">
+                    <ComboBoxItem Content="Debug"/>
+                    <ComboBoxItem Content="Info"/>
+                    <ComboBoxItem Content="Warn"/>
+                    <ComboBoxItem Content="Error"/>
+                </ComboBox>
+                <TextBlock Grid.Row="2" Text="Keep logs (days)" VerticalAlignment="Center"/>
+                <TextBox Grid.Row="2" Grid.Column="1" Name="TxtRetention" Width="100" HorizontalAlignment="Left" Margin="0,3"/>
+                <TextBlock Grid.Row="3" Text="Chat pages to search" VerticalAlignment="Center"/>
+                <TextBox Grid.Row="3" Grid.Column="1" Name="TxtChatPages" Width="100" HorizontalAlignment="Left" Margin="0,3" ToolTip="Used to find chats for deep-link blasts (50 chats per page, most recent first)"/>
+                <TextBlock Grid.Row="4" Grid.ColumnSpan="2" Name="TxtAppData" Style="{StaticResource Muted}" Margin="0,6,0,0" FontSize="12"/>
+            </Grid>
+        </Border>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="6">
+            <Button Name="BtnOpenAppData" Content="Open data folder"/>
+            <Button Name="BtnCancel" Content="Cancel" IsCancel="True"/>
+            <Button Name="BtnSave" Content="Save" Style="{StaticResource PrimaryButton}" IsDefault="True"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

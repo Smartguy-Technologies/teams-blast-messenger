@@ -1,0 +1,7 @@
+# Test / local artifacts
+*.tmp
+*.journal
+TestResults/
+.tbm-test-appdata/
+.DS_Store
+Thumbs.db

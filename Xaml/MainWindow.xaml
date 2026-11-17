@@ -1,0 +1,208 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Teams Blast Messenger" Height="860" Width="1360" MinHeight="660" MinWidth="1080"
+        WindowStartupLocation="CenterScreen" Background="#F5F6FA" FontFamily="Segoe UI" FontSize="13">
+    <DockPanel>
+        <!-- Header -->
+        <Border DockPanel.Dock="Top" Background="#464EB8" Padding="14,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Vertical" VerticalAlignment="Center">
+                    <TextBlock Text="Teams Blast Messenger" Foreground="White" FontSize="18" FontWeight="SemiBold"/>
+                    <TextBlock Text="Personalized Teams messages from a spreadsheet" Foreground="#D6D9F5" FontSize="12"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="28,0,0,0">
+                    <Ellipse Name="EllConnection" Width="10" Height="10" Fill="#F0B429" VerticalAlignment="Center"/>
+                    <TextBlock Name="TxtConnection" Text="Not connected (deep-link fallback)" Foreground="White" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button Name="BtnConnect" Content="Connect" Style="{StaticResource HeaderButton}" ToolTip="Sign in to Microsoft Graph"/>
+                    <Button Name="BtnDisconnect" Content="Disconnect" Style="{StaticResource HeaderButton}" Visibility="Collapsed"/>
+                    <Button Name="BtnHistory" Content="History" Style="{StaticResource HeaderButton}" ToolTip="Previous blasts and their results"/>
+                    <Button Name="BtnInteractions" Content="Interactions" Style="{StaticResource HeaderButton}" ToolTip="Who replied to your most recent blast, what they said and how quickly"/>
+                    <Button Name="BtnSettings" Content="Settings" Style="{StaticResource HeaderButton}"/>
+                    <Button Name="BtnOpenLogs" Content="Logs" Style="{StaticResource HeaderButton}" ToolTip="Open the log folder"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Action bar -->
+        <Border DockPanel.Dock="Bottom" Background="White" BorderBrush="#D9DCE6" BorderThickness="0,1,0,0" Padding="12,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Send via" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox Name="CmbTransport" Width="260" SelectedIndex="0">
+                        <ComboBoxItem Tag="Auto" Content="Auto (Graph if connected, else deep link)"/>
+                        <ComboBoxItem Tag="Graph" Content="Microsoft Graph"/>
+                        <ComboBoxItem Tag="DeepLinkManual" Content="Deep link – I press Send"/>
+                        <ComboBoxItem Tag="DeepLinkAuto" Content="Deep link – auto press Enter"/>
+                    </ComboBox>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Vertical" VerticalAlignment="Center" Margin="18,0">
+                    <TextBlock Name="TxtProgress" Text="Ready." TextTrimming="CharacterEllipsis"/>
+                    <ProgressBar Name="PrgSend" Height="6" Margin="0,4,0,0" Minimum="0" Maximum="1" Value="0" Foreground="#5B5FC7"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button Name="BtnManualNext" Content="Sent – Next" Style="{StaticResource PrimaryButton}" Visibility="Collapsed" ToolTip="I sent the message in Teams; open the next recipient"/>
+                    <Button Name="BtnManualSkip" Content="Skip" Visibility="Collapsed"/>
+                    <Button Name="BtnPreviewAll" Content="Dry run" ToolTip="Render every selected message and flag problems without sending"/>
+                    <Button Name="BtnTest" Content="Test send" ToolTip="Send the previewed message to your test recipient (Settings) or yourself"/>
+                    <Button Name="BtnCancel" Content="Cancel" IsEnabled="False"/>
+                    <Button Name="BtnSend" Content="Send" Style="{StaticResource PrimaryButton}" MinWidth="110"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Margin="6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="11*" MinWidth="420"/>
+                <ColumnDefinition Width="5"/>
+                <ColumnDefinition Width="9*" MinWidth="400"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Recipients -->
+            <Border Style="{StaticResource Card}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="1  Recipients" Style="{StaticResource CardTitle}"/>
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Name="TxtFile" IsReadOnly="True" Text="Choose a CSV or Excel file…" Foreground="#616673"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Button Name="BtnBrowse" Content="Browse…"/>
+                            <Button Name="BtnReload" Content="Reload" IsEnabled="False"/>
+                        </StackPanel>
+                    </Grid>
+                    <WrapPanel Grid.Row="2" Margin="0,8,0,0">
+                        <TextBlock Text="Sheet" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <ComboBox Name="CmbSheet" Width="160" IsEnabled="False" Margin="0,0,16,0"/>
+                        <TextBlock Text="Recipient column" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <ComboBox Name="CmbRecipientColumn" Width="180" IsEnabled="False" Margin="0,0,16,0"/>
+                        <Button Name="BtnSelectAll" Content="Select valid" IsEnabled="False"/>
+                        <Button Name="BtnSelectNone" Content="Select none" IsEnabled="False"/>
+                    </WrapPanel>
+                    <TextBlock Grid.Row="3" Name="TxtRecipientSummary" Style="{StaticResource Muted}" Margin="0,8,0,6" Text="No file loaded."/>
+                    <DataGrid Grid.Row="4" Name="GridRecipients" AutoGenerateColumns="True" CanUserSortColumns="True">
+                        <DataGrid.RowStyle>
+                            <Style TargetType="DataGridRow">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding [TBM_Status]}" Value="Sent">
+                                        <Setter Property="Background" Value="#E7F6EC"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding [TBM_Status]}" Value="Failed">
+                                        <Setter Property="Background" Value="#FDECEC"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding [TBM_Status]}" Value="Invalid email">
+                                        <Setter Property="Background" Value="#FFF4E0"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding [TBM_Status]}" Value="Duplicate">
+                                        <Setter Property="Background" Value="#FFF4E0"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding [TBM_Status]}" Value="Sending">
+                                        <Setter Property="Background" Value="#E8EBFA"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </DataGrid.RowStyle>
+                    </DataGrid>
+                </Grid>
+            </Border>
+
+            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="Transparent"/>
+
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="5*"/>
+                    <RowDefinition Height="3*"/>
+                    <RowDefinition Height="2*" MinHeight="110"/>
+                </Grid.RowDefinitions>
+
+                <!-- Message -->
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="2  Message" Style="{StaticResource CardTitle}"/>
+                        <WrapPanel Grid.Row="1" Margin="0,0,0,8">
+                            <RadioButton Name="RadIndividual" Content="Individually (1:1 chats)" IsChecked="True" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                            <RadioButton Name="RadGroup" Content="As one group chat" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <TextBox Name="TxtTopic" Width="170" IsEnabled="False" ToolTip="Group chat name (optional)" Margin="0,0,14,0"/>
+                            <TextBlock Text="Format" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <ComboBox Name="CmbFormat" Width="110" SelectedIndex="0">
+                                <ComboBoxItem Tag="Text" Content="Plain text"/>
+                                <ComboBoxItem Tag="Html" Content="HTML"/>
+                            </ComboBox>
+                        </WrapPanel>
+                        <TextBox Grid.Row="2" Name="TxtMessage" AcceptsReturn="True" AcceptsTab="True" TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto" FontSize="14" MinHeight="120"
+                                 Text="Hi {First Name},&#x0a;&#x0a;"/>
+                        <DockPanel Grid.Row="3" Margin="0,8,0,0">
+                            <TextBlock DockPanel.Dock="Left" Text="Tokens" Style="{StaticResource Muted}" VerticalAlignment="Top" Margin="0,3,8,0" ToolTip="Double-click a token to insert it at the cursor"/>
+                            <ListBox Name="LstTokens" MaxHeight="64" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ToolTip="Double-click to insert at the cursor">
+                                <ListBox.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel/>
+                                    </ItemsPanelTemplate>
+                                </ListBox.ItemsPanel>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="#E8EBFA" CornerRadius="10" Padding="8,2">
+                                            <TextBlock Text="{Binding}" Foreground="#464EB8" FontSize="12"/>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </DockPanel>
+                        <TextBlock Grid.Row="4" Name="TxtValidation" TextWrapping="Wrap" Margin="0,6,0,0" Foreground="#B54708"/>
+                    </Grid>
+                </Border>
+
+                <!-- Preview -->
+                <Border Grid.Row="1" Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <DockPanel>
+                            <TextBlock Text="3  Preview" Style="{StaticResource CardTitle}"/>
+                            <TextBlock Name="TxtPreviewRecipient" Style="{StaticResource Muted}" Margin="12,2,0,0" TextTrimming="CharacterEllipsis"/>
+                        </DockPanel>
+                        <TextBox Grid.Row="1" Name="TxtPreview" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Background="#FAFBFD" FontSize="14"/>
+                    </Grid>
+                </Border>
+
+                <!-- Activity log -->
+                <Border Grid.Row="2" Style="{StaticResource Card}" Padding="10,8">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="Activity" Style="{StaticResource CardTitle}" Margin="0,0,0,4"/>
+                        <TextBox Name="TxtLog" IsReadOnly="True" FontFamily="Consolas" FontSize="12" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Background="#FAFBFD" BorderThickness="0"/>
+                    </DockPanel>
+                </Border>
+            </Grid>
+        </Grid>
+    </DockPanel>
+</Window>

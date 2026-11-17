@@ -1,0 +1,68 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Interactions – Teams Blast Messenger" Height="700" Width="1240" MinHeight="460" MinWidth="860"
+        WindowStartupLocation="CenterOwner" Background="#F5F6FA" FontFamily="Segoe UI" FontSize="13">
+    <DockPanel Margin="6">
+        <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Padding="10,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Name="TxtTitle" Text="Interactions" Style="{StaticResource CardTitle}" Margin="0" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Name="TxtSummary" Style="{StaticResource Muted}" Margin="0,2,0,0"/>
+                    <TextBlock Name="TxtChecked" Style="{StaticResource Muted}" FontSize="11" Margin="0,2,0,0"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Name="BtnScan" Content="Check for replies" Style="{StaticResource PrimaryButton}"/>
+                    <Button Name="BtnCancelScan" Content="Cancel" IsEnabled="False"/>
+                    <Button Name="BtnExport" Content="Export CSV" IsEnabled="False"/>
+                    <Button Name="BtnClose" Content="Close"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+        <StackPanel DockPanel.Dock="Top" Margin="8,0,8,4">
+            <TextBlock Name="TxtProgress" Style="{StaticResource Muted}"/>
+            <ProgressBar Name="PrgScan" Height="5" Margin="0,3,0,0" Minimum="0" Maximum="1" Value="0" Foreground="#5B5FC7"/>
+        </StackPanel>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="3*"/>
+                <RowDefinition Height="5"/>
+                <RowDefinition Height="2*"/>
+            </Grid.RowDefinitions>
+            <Border Style="{StaticResource Card}" Padding="0">
+                <DataGrid Name="GridResults" IsReadOnly="True" BorderThickness="0" CanUserSortColumns="True">
+                    <DataGrid.RowStyle>
+                        <Style TargetType="DataGridRow">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Responded}" Value="True">
+                                    <Setter Property="Background" Value="#E7F6EC"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </DataGrid.RowStyle>
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Recipient" Binding="{Binding Recipient}" Width="250"/>
+                        <DataGridTextColumn Header="Responded" Binding="{Binding RespondedText}" Width="80"/>
+                        <DataGridTextColumn Header="Replies" Binding="{Binding ReplyCount}" Width="60"/>
+                        <DataGridTextColumn Header="Sent" Binding="{Binding SentLocal}" Width="140"/>
+                        <DataGridTextColumn Header="First reply" Binding="{Binding FirstReplyLocal}" Width="140"/>
+                        <DataGridTextColumn Header="Response time" Binding="{Binding ResponseTimeDisplay}" Width="105" SortMemberPath="ResponseTime"/>
+                        <DataGridTextColumn Header="Reactions" Binding="{Binding Reactions}" Width="90"/>
+                        <DataGridTextColumn Header="What they said" Binding="{Binding FirstReplyText}" Width="*"/>
+                        <DataGridTextColumn Header="Note" Binding="{Binding Error}" Width="160"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Border>
+            <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" Background="Transparent"/>
+            <Border Grid.Row="2" Style="{StaticResource Card}">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Name="TxtRepliesTitle" Text="All replies" Style="{StaticResource CardTitle}"/>
+                    <TextBox Name="TxtReplies" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Background="#FAFBFD"/>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </DockPanel>
+</Window>
