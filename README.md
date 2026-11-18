@@ -228,7 +228,7 @@ Invalid or unknown values are ignored and logged, so a typo never stops the app.
 
 * **Group Policy.** Copy `TeamsBlastMessenger.admx` and `en-US\TeamsBlastMessenger.adml` to `%SystemRoot%\PolicyDefinitions` or your Central Store. Then set the policies under *Administrative Templates → Teams Blast Messenger → Defaults / Enforced*. They appear under both Computer and User Configuration.
 * **Intune.** Under *Devices → Configuration → Create → Templates → Imported Administrative templates*, import the same ADMX/ADML, then configure the settings.
-* **Script or package.** Edit `Example-Policy.reg`, which enforces an app registration and Graph-only sending and sets two defaults. Deploy it with `reg import Example-Policy.reg` (as administrator), Group Policy Preferences, or your software deployment tool.
+* **Script or package.** Edit `Example-Policy.reg`, which enforces an app registration and Graph-only sending and sets two defaults. **Replace the placeholder `ClientId` (`00000000-0000-0000-0000-000000000000`) and `TenantId` (`contoso.onmicrosoft.com`) with your own app registration's IDs first.** The placeholders are valid formats, so the app won't flag them, but sign-in will fail. Then deploy it with `reg import Example-Policy.reg` (as administrator), Group Policy Preferences, or your software deployment tool.
 
 **Checking what applies:**
 
