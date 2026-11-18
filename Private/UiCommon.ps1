@@ -160,7 +160,7 @@ function Invoke-TbmUiAction {
     }
     catch {
         Write-TbmLog -Source 'UI' -Message ('{0} failed.' -f $Name) -ErrorRecord $_
-        [void](Show-TbmMessageBox -Text ("{0} failed:`n`n{1}" -f $Name, $_.Exception.Message) -Icon ([System.Windows.MessageBoxImage]::Error))
+        $null = Show-TbmMessageBox -Text ("{0} failed:`n`n{1}" -f $Name, $_.Exception.Message) -Icon ([System.Windows.MessageBoxImage]::Error)
     }
 }
 
@@ -231,7 +231,7 @@ function Open-TbmFolder {
         [ValidateNotNullOrEmpty()]
         [string]$Path
     )
-    [void][System.IO.Directory]::CreateDirectory($Path)
+    $null = [System.IO.Directory]::CreateDirectory($Path)
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new('explorer.exe', ('"{0}"' -f $Path))
     $startInfo.UseShellExecute = $true
     $process = [System.Diagnostics.Process]::Start($startInfo)
@@ -382,7 +382,7 @@ function Show-TbmSettingsWindow {
                     if ($check.Valid) { $values[$name] = $check.Value } else { $errors.Add($check.Error) }
                 }
                 if ($errors.Count -gt 0) {
-                    [void](Show-TbmMessageBox -Text ([string]::Join("`n", $errors)) -Icon ([System.Windows.MessageBoxImage]::Warning) -Owner $settingsView.Ui.Window)
+                    $null = Show-TbmMessageBox -Text ([string]::Join("`n", $errors)) -Icon ([System.Windows.MessageBoxImage]::Warning) -Owner $settingsView.Ui.Window
                     return
                 }
 
@@ -391,14 +391,14 @@ function Show-TbmSettingsWindow {
                 Save-TbmSettings -Settings $target
 
                 $level = [TeamsBlastMessenger.TbmLogLevel]::Info
-                [void][System.Enum]::TryParse([string]$target.LogLevel, $true, [ref]$level)
+                $null = [System.Enum]::TryParse([string]$target.LogLevel, $true, [ref]$level)
                 [TeamsBlastMessenger.TbmLogger]::MinimumLevel = $level
                 $settingsView.Saved = $true
                 $settingsView.Ui.Window.DialogResult = $true
             }
         })
 
-    [void]$ui.Window.ShowDialog()
+    $null = $ui.Window.ShowDialog()
     return [bool]$settingsView.Saved
 }
 
@@ -445,7 +445,7 @@ function Show-TbmDeviceCodeWindow {
             Invoke-TbmUiAction -Name 'Open sign-in page' -Action {
                 [System.Windows.Clipboard]::SetText($deviceView.Code.UserCode)
                 Start-TbmDeepLink -Uri $deviceView.Code.VerificationUri
-                $deviceView.Ui.Controls.TxtStatus.Text = 'Code copied. Paste it on the sign-in page, then finish signing in…'
+                $deviceView.Ui.Controls.TxtStatus.Text = 'Code copied. Paste it on the sign-in page, then finish signing in...'
             }
         })
 
@@ -472,7 +472,7 @@ function Show-TbmDeviceCodeWindow {
     }
     $ui.Window.Add_Closed({ $deviceView.Timer.Stop() })
     $deviceView.Timer.Start()
-    [void]$ui.Window.ShowDialog()
+    $null = $ui.Window.ShowDialog()
     return [bool]$deviceView.Success
 }
 
@@ -532,7 +532,7 @@ function Show-TbmManualRecipientsWindow {
                 $manualView.Entries = $entries
                 $controls.GridEntries.ItemsSource = $null
                 $controls.GridEntries.ItemsSource = $entries
-                $controls.TxtSummary.Text = '{0} entr(ies) found · {1} ready to add · {2} need attention (highlighted; they will not be added).' -f $entries.Count, $valid, ($entries.Count - $valid)
+                $controls.TxtSummary.Text = '{0} entr(ies) found | {1} ready to add | {2} need attention (highlighted; they will not be added).' -f $entries.Count, $valid, ($entries.Count - $valid)
                 $controls.BtnAdd.IsEnabled = $valid -gt 0
                 $controls.BtnAdd.Content = 'Add {0} recipient(s)' -f $valid
             }
@@ -544,8 +544,8 @@ function Show-TbmManualRecipientsWindow {
                 $manualView.Ui.Window.DialogResult = $true
             }
         })
-    $ui.Window.Add_Loaded({ [void]$manualView.Ui.Controls.TxtInput.Focus() })
-    [void]$ui.Window.ShowDialog()
+    $ui.Window.Add_Loaded({ $null = $manualView.Ui.Controls.TxtInput.Focus() })
+    $null = $ui.Window.ShowDialog()
     return $manualView.Result
 }
 

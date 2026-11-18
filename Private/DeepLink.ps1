@@ -84,7 +84,7 @@ function Get-TbmTeamsProcessInfo {
     foreach ($name in $script:TbmTeamsProcessNames) {
         foreach ($process in [System.Diagnostics.Process]::GetProcessesByName($name)) {
             try {
-                [void]$ids.Add($process.Id)
+                $null = $ids.Add($process.Id)
                 if ($handle -eq [System.IntPtr]::Zero -and $process.MainWindowHandle -ne [System.IntPtr]::Zero) { $handle = $process.MainWindowHandle }
             }
             finally {
@@ -112,7 +112,7 @@ function Send-TbmTeamsEnterKey {
 
     $foregroundId = [TeamsBlastMessenger.TbmNative]::GetForegroundProcessId()
     if (-not $teams.ProcessIds.Contains($foregroundId)) {
-        [void][TeamsBlastMessenger.TbmNative]::Activate($teams.WindowHandle)
+        $null = [TeamsBlastMessenger.TbmNative]::Activate($teams.WindowHandle)
         [System.Threading.Thread]::Sleep(400)
         $foregroundId = [TeamsBlastMessenger.TbmNative]::GetForegroundProcessId()
     }

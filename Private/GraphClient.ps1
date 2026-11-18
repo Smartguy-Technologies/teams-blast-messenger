@@ -17,7 +17,7 @@ function Get-TbmHttpClient {
         [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
         $client = [System.Net.Http.HttpClient]::new()
         $client.Timeout = [System.TimeSpan]::FromSeconds(100)
-        [void]$client.DefaultRequestHeaders.TryAddWithoutValidation('User-Agent', 'TeamsBlastMessenger/1.0')
+        $null = $client.DefaultRequestHeaders.TryAddWithoutValidation('User-Agent', 'TeamsBlastMessenger/1.0')
         $script:TbmHttpClient = $client
     }
     return $script:TbmHttpClient
@@ -55,7 +55,7 @@ function Invoke-TbmHttpRequest {
     try {
         if ($null -ne $Headers) {
             foreach ($key in $Headers.Keys) {
-                [void]$request.Headers.TryAddWithoutValidation([string]$key, [string]$Headers[$key])
+                $null = $request.Headers.TryAddWithoutValidation([string]$key, [string]$Headers[$key])
             }
         }
         if ($PSBoundParameters.ContainsKey('JsonBody')) {
@@ -216,7 +216,7 @@ function Invoke-TbmGraphRequest {
         if ($response.StatusCode -eq 401 -and -not $refreshedAfter401) {
             $refreshedAfter401 = $true
             Write-TbmLog -Level Warn -Source 'Graph' -Message 'Received 401; refreshing access token and retrying once.'
-            [void](Get-TbmAccessToken -AuthState $AuthState -ForceRefresh)
+            $null = Get-TbmAccessToken -AuthState $AuthState -ForceRefresh
             continue
         }
 
@@ -381,7 +381,7 @@ function New-TbmGraphChat {
 
     $allIds = [System.Collections.Generic.List[string]]::new()
     $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    [void]$seen.Add([string]$AuthState.MeId)
+    $null = $seen.Add([string]$AuthState.MeId)
     $allIds.Add([string]$AuthState.MeId)
     foreach ($id in $MemberUserIds) { if ($seen.Add($id)) { $allIds.Add($id) } }
 

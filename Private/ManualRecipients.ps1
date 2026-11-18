@@ -173,7 +173,7 @@ function Resolve-TbmManualEntryNames {
     )
 
     $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    foreach ($entry in $Entries) { if ($entry.Status -eq 'OK') { [void]$seen.Add($entry.Email) } }
+    foreach ($entry in $Entries) { if ($entry.Status -eq 'OK') { $null = $seen.Add($entry.Email) } }
 
     foreach ($entry in $Entries) {
         if ($entry.Status -ne 'Needs email' -or [string]::IsNullOrWhiteSpace($entry.Name)) { continue }

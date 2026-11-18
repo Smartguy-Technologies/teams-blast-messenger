@@ -9,7 +9,7 @@
                 <TextBlock Name="TxtInstructions" TextWrapping="Wrap" Style="{StaticResource Muted}"/>
                 <TextBox Name="TxtUserCode" IsReadOnly="True" FontSize="28" FontFamily="Consolas" FontWeight="Bold" HorizontalContentAlignment="Center"
                          Margin="0,14" Padding="8" BorderBrush="#5B5FC7" Foreground="#464EB8"/>
-                <TextBlock Name="TxtStatus" Text="Waiting for you to finish signing in…" Style="{StaticResource Muted}"/>
+                <TextBlock Name="TxtStatus" Text="Waiting for you to finish signing in..." Style="{StaticResource Muted}"/>
             </StackPanel>
         </Border>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="6">

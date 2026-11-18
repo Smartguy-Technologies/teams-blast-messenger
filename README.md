@@ -23,7 +23,7 @@ It also keeps a **send history** and tracks **interactions**: who replied, what 
      powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File .\Start-TeamsBlastMessenger.ps1
      ```
 
-3. Click **Import CSV / Excel…** and load your recipient spreadsheet (recommended; `sample-recipients.csv` shows the layout). To type or paste a few people instead, or to add people to an imported list, use **Add manually…**.
+3. Click **Import CSV / Excel...** and load your recipient spreadsheet (recommended; `sample-recipients.csv` shows the layout). To type or paste a few people instead, or to add people to an imported list, use **Add manually...**.
 4. Write the message using `{Column Name}` tokens. Double-click a token chip to insert it.
 5. Check the **Preview**. Click a row to preview that person's message.
 6. Run **Dry run** to check for problems, then use **Test send** and **Send**.
@@ -43,7 +43,7 @@ The **Send via** box at the bottom chooses the method. **Auto** uses Graph when 
 * **Graph:** `POST /chats` followed by `POST /chats/{id}/messages` is the only supported API that posts a 1:1 or group chat message *as you*.
   * It needs **delegated** permissions. Application (app-only) permissions can't send chat messages; they only allow migration imports.
   * For 1:1 chats, `POST /chats` returns your existing chat with that person rather than creating a duplicate.
-* **Deep links:** `msteams:/l/chat/0/0?users=…&message=…` opens the chat with the text already filled in. It needs no setup.
+* **Deep links:** `msteams:/l/chat/0/0?users=...&message=...` opens the chat with the text already filled in. It needs no setup.
   * Teams has no API to *send* through a deep link. Pressing Send is up to you or to the auto-Enter mode.
   * Auto-Enter brings Teams to the front and confirms Teams is the active window before it presses Enter.
   * Deep links are plain text only, and long messages can be cut off (see the **Max deep-link length** setting).
@@ -63,9 +63,9 @@ Then click **Connect** and sign in. Leave the Client ID blank in Settings, or se
 
 **Option B: your own app registration** (device code sign-in, no modules required):
 
-1. In Entra admin center, go to **App registrations → New registration**. Choose *Accounts in this organizational directory only*.
+1. In Entra admin center, go to **App registrations > New registration**. Choose *Accounts in this organizational directory only*.
 2. Under **Authentication**, set **Allow public client flows** to **Yes**.
-3. Under **API permissions**, add these **Microsoft Graph → Delegated** permissions:
+3. Under **API permissions**, add these **Microsoft Graph > Delegated** permissions:
    * `User.Read`
    * `User.ReadBasic.All`
    * `Chat.Create`
@@ -95,7 +95,7 @@ Before sending, the tool checks the message:
 * In **group** mode, everyone gets the same message, so column tokens use the first selected row's values.
 * Recipient emails are validated, and duplicates are unticked automatically.
 
-**Formats.** In *Plain text* the message is sent as typed, with line breaks kept. In *HTML* you write Teams-supported HTML (`<b>`, `<i>`, `<a href>`, `<br>`, lists…), and spreadsheet values are HTML-encoded for you.
+**Formats.** In *Plain text* the message is sent as typed, with line breaks kept. In *HTML* you write Teams-supported HTML (`<b>`, `<i>`, `<a href>`, `<br>`, lists...), and spreadsheet values are HTML-encoded for you.
 
 ## Spreadsheets
 
@@ -107,7 +107,7 @@ The first non-blank row is the header. The recipient column is auto-detected fro
 
 ## Adding people manually
 
-Importing a spreadsheet is the recommended way to send, because it gives you columns for personalization. For a few extra people, or a quick send without a file, use **Add manually…**. Type or paste one person per line; semicolons, or commas between addresses, work too:
+Importing a spreadsheet is the recommended way to send, because it gives you columns for personalization. For a few extra people, or a quick send without a file, use **Add manually...**. Type or paste one person per line; semicolons, or commas between addresses, work too:
 
 ```
 jane@contoso.com
@@ -191,7 +191,7 @@ Settings normally belong to each user (`%APPDATA%\TeamsBlastMessenger\settings.j
 |---|---|
 | `HKLM\SOFTWARE\Policies\TeamsBlastMessenger\Defaults` | Organization **defaults**. Users start with these and can still change them |
 | `HKLM\SOFTWARE\Policies\TeamsBlastMessenger\Enforced` | **Locked** values. They override the user's choice, and the field is greyed out with "Set by your organization" |
-| `HKCU\SOFTWARE\Policies\TeamsBlastMessenger\…` | Same as above, but for user-targeted policy. HKLM wins when both are set |
+| `HKCU\SOFTWARE\Policies\TeamsBlastMessenger\...` | Same as above, but for user-targeted policy. HKLM wins when both are set |
 
 **Precedence**, lowest to highest:
 
@@ -216,18 +216,18 @@ Settings normally belong to each user (`%APPDATA%\TeamsBlastMessenger\settings.j
 | `DeepLinkTarget` | string | `Desktop`, `Web` |
 | `TestRecipient` | string | email address |
 | `LogLevel` | string | `Debug`, `Info`, `Warn`, `Error` |
-| `PacingDelayMs` | DWORD | 0–60000 |
-| `DeepLinkSendDelaySeconds` | DWORD | 1–120 |
-| `DeepLinkMaxUrlLength` | DWORD | 500–32000 |
-| `LogRetentionDays` | DWORD | 1–3650 |
-| `InteractionMaxChatPages` | DWORD | 1–400 |
+| `PacingDelayMs` | DWORD | 0-60000 |
+| `DeepLinkSendDelaySeconds` | DWORD | 1-120 |
+| `DeepLinkMaxUrlLength` | DWORD | 500-32000 |
+| `LogRetentionDays` | DWORD | 1-3650 |
+| `InteractionMaxChatPages` | DWORD | 1-400 |
 
 Invalid or unknown values are ignored and logged, so a typo never stops the app.
 
 **Ways to deploy** (all in `Policy\`):
 
-* **Group Policy.** Copy `TeamsBlastMessenger.admx` and `en-US\TeamsBlastMessenger.adml` to `%SystemRoot%\PolicyDefinitions` or your Central Store. Then set the policies under *Administrative Templates → Teams Blast Messenger → Defaults / Enforced*. They appear under both Computer and User Configuration.
-* **Intune.** Under *Devices → Configuration → Create → Templates → Imported Administrative templates*, import the same ADMX/ADML, then configure the settings.
+* **Group Policy.** Copy `TeamsBlastMessenger.admx` and `en-US\TeamsBlastMessenger.adml` to `%SystemRoot%\PolicyDefinitions` or your Central Store. Then set the policies under *Administrative Templates > Teams Blast Messenger > Defaults / Enforced*. They appear under both Computer and User Configuration.
+* **Intune.** Under *Devices > Configuration > Create > Templates > Imported Administrative templates*, import the same ADMX/ADML, then configure the settings.
 * **Script or package.** Edit `Example-Policy.reg`, which enforces an app registration and Graph-only sending and sets two defaults. **Replace the placeholder `ClientId` (`00000000-0000-0000-0000-000000000000`) and `TenantId` (`contoso.onmicrosoft.com`) with your own app registration's IDs first.** The placeholders are valid formats, so the app won't flag them, but sign-in will fail. Then deploy it with `reg import Example-Policy.reg` (as administrator), Group Policy Preferences, or your software deployment tool.
 
 **Checking what applies:**
@@ -245,7 +245,7 @@ Invalid or unknown values are ignored and logged, so a typo never stops the app.
 * **Recipients must be in your directory.** External, guest or blocked users fail with a clear reason, and you can retry them from History.
 * **Group chats** hold at most 250 people including you.
 * **Test send** goes to *Test recipient* (Settings), or to yourself when connected, using your Teams self-chat. If your tenant rejects self-chat sends, set a colleague as the test recipient.
-* **Response times** for deep-link sends are measured from when you clicked *Sent – Next* (manual mode) or when Enter was pressed (auto mode).
+* **Response times** for deep-link sends are measured from when you clicked *Sent - Next* (manual mode) or when Enter was pressed (auto mode).
 
 ## Project layout
 

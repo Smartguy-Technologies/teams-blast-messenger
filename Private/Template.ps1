@@ -224,11 +224,11 @@ function Expand-TbmTemplate {
     $last = 0
 
     foreach ($match in $script:TbmTokenRegex.Matches($Template)) {
-        [void]$builder.Append($Template, $last, $match.Index - $last)
+        $null = $builder.Append($Template, $last, $match.Index - $last)
         $last = $match.Index + $match.Length
 
-        if ($match.Value -eq '{{') { [void]$builder.Append('{'); continue }
-        if ($match.Value -eq '}}') { [void]$builder.Append('}'); continue }
+        if ($match.Value -eq '{{') { $null = $builder.Append('{'); continue }
+        if ($match.Value -eq '}}') { $null = $builder.Append('}'); continue }
 
         $name = $match.Groups[1].Value.Trim()
         $key = ConvertTo-TbmTokenKey -Name $name
@@ -249,7 +249,7 @@ function Expand-TbmTemplate {
 
         if (-not $resolved) {
             $unknown.Add($name)
-            [void]$builder.Append($match.Value)
+            $null = $builder.Append($match.Value)
             continue
         }
 
@@ -261,9 +261,9 @@ function Expand-TbmTemplate {
             $value = $value.Trim()
         }
         if ($HtmlEncodeValues) { $value = [System.Net.WebUtility]::HtmlEncode($value) }
-        [void]$builder.Append($value)
+        $null = $builder.Append($value)
     }
-    [void]$builder.Append($Template, $last, $Template.Length - $last)
+    $null = $builder.Append($Template, $last, $Template.Length - $last)
 
     return [pscustomobject]@{
         Text          = $builder.ToString()

@@ -1,6 +1,6 @@
 ﻿<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Settings – Teams Blast Messenger" Width="640" SizeToContent="Height" ResizeMode="NoResize"
+        Title="Settings - Teams Blast Messenger" Width="640" SizeToContent="Height" ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner" Background="#F5F6FA" FontFamily="Segoe UI" FontSize="13">
     <StackPanel Margin="6">
         <Border Name="BdrPolicy" Visibility="Collapsed" Background="#E8EBFA" BorderBrush="#5B5FC7" BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="6">

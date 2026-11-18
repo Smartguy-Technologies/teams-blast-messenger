@@ -340,7 +340,7 @@ namespace TeamsBlastMessenger
             string text = html.Replace("\r", string.Empty).Replace("\n", string.Empty);
             text = BreakTags.Replace(text, "\n");
             text = AnyTag.Replace(text, string.Empty);
-            text = WebUtility.HtmlDecode(text).Replace(' ', ' ');
+            text = WebUtility.HtmlDecode(text).Replace('\u00A0', ' ');
             text = BlankRuns.Replace(text, " ");
             text = NewlineRuns.Replace(text, "\n\n");
             return text.Trim();
@@ -363,7 +363,8 @@ namespace TeamsBlastMessenger
         public static string Truncate(string text, int maxLength)
         {
             if (string.IsNullOrEmpty(text) || text.Length <= maxLength) { return text ?? string.Empty; }
-            return text.Substring(0, Math.Max(0, maxLength - 1)) + "…";
+            if (maxLength <= 3) { return text.Substring(0, Math.Max(0, maxLength)); }
+            return text.Substring(0, maxLength - 3) + "...";
         }
 
         public static string FormatLocal(DateTime? utc)

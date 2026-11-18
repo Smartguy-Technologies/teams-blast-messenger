@@ -66,7 +66,7 @@ function Start-TbmBackgroundJob {
 
     $powershell = [System.Management.Automation.PowerShell]::Create()
     $powershell.Runspace = $runspace
-    [void]$powershell.AddCommand($CommandName).AddParameter('Job', $Job)
+    $null = $powershell.AddCommand($CommandName).AddParameter('Job', $Job)
     $asyncResult = $powershell.BeginInvoke()
     Write-TbmLog -Level Debug -Source 'Jobs' -Message ('Started {0}.' -f $CommandName)
     return @{ PowerShell = $powershell; Runspace = $runspace; AsyncResult = $asyncResult; CommandName = $CommandName }
@@ -85,7 +85,7 @@ function Complete-TbmBackgroundJob {
     )
 
     try {
-        [void]$Handle.PowerShell.EndInvoke($Handle.AsyncResult)
+        $null = $Handle.PowerShell.EndInvoke($Handle.AsyncResult)
         foreach ($record in $Handle.PowerShell.Streams.Error) {
             Write-TbmLog -Source 'Jobs' -Message ('{0} reported an error.' -f $Handle.CommandName) -ErrorRecord $record
         }

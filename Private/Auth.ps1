@@ -90,10 +90,7 @@ function Get-TbmJwtExpiryUtc {
     $parts = $Token.Split('.')
     if ($parts.Length -lt 2) { return $fallback }
     $payload = $parts[1].Replace('-', '+').Replace('_', '/')
-    switch ($payload.Length % 4) {
-        2 { $payload += '==' }
-        3 { $payload += '=' }
-    }
+    $payload = $payload.PadRight($payload.Length + ((4 - ($payload.Length % 4)) % 4), '=')
     try {
         $json = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($payload))
         $match = [System.Text.RegularExpressions.Regex]::Match($json, '"exp"\s*:\s*(\d+)')
@@ -430,7 +427,7 @@ function Save-TbmTokenCache {
     $plain = [System.Text.Encoding]::UTF8.GetBytes($payload)
     $protected = [System.Security.Cryptography.ProtectedData]::Protect($plain, $script:TbmDpapiEntropy, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)
     $path = Get-TbmAppDataPath -Name 'TokenCache'
-    [void][System.IO.Directory]::CreateDirectory([System.IO.Path]::GetDirectoryName($path))
+    $null = [System.IO.Directory]::CreateDirectory([System.IO.Path]::GetDirectoryName($path))
     [System.IO.File]::WriteAllBytes($path, $protected)
 }
 

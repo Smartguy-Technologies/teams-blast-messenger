@@ -19,7 +19,7 @@ if ([System.Threading.Thread]::CurrentThread.GetApartmentState() -ne [System.Thr
     $arguments = '-NoProfile -STA -ExecutionPolicy Bypass -File "{0}"' -f $PSCommandPath
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new($executable, $arguments)
     $startInfo.UseShellExecute = $false
-    [void][System.Diagnostics.Process]::Start($startInfo)
+    $null = [System.Diagnostics.Process]::Start($startInfo)
     return
 }
 
@@ -31,7 +31,7 @@ catch {
     $message = 'Teams Blast Messenger could not start: {0}' -f $_.Exception.Message
     try {
         Add-Type -AssemblyName 'PresentationFramework'
-        [void][System.Windows.MessageBox]::Show($message, 'Teams Blast Messenger', 'OK', 'Error')
+        $null = [System.Windows.MessageBox]::Show($message, 'Teams Blast Messenger', 'OK', 'Error')
     }
     catch {
         Write-Error -Message $message

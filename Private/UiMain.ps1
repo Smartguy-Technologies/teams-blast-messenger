@@ -16,7 +16,7 @@ function Register-TbmMainWindowEvents {
             param($source, $exceptionArgs)
             Write-TbmLog -Level Error -Source 'UI' -Message ('Unhandled UI exception: ' + $exceptionArgs.Exception.ToString())
             $exceptionArgs.Handled = $true
-            [void](Show-TbmMessageBox -Text ('Unexpected error: ' + $exceptionArgs.Exception.Message) -Icon ([System.Windows.MessageBoxImage]::Error))
+            $null = Show-TbmMessageBox -Text ('Unexpected error: ' + $exceptionArgs.Exception.Message) -Icon ([System.Windows.MessageBoxImage]::Error)
         })
     $window.Add_Loaded({ Invoke-TbmUiAction -Name 'Startup' -Action { Initialize-TbmMainWindowState } })
     $window.Add_Closing({
@@ -40,7 +40,7 @@ function Register-TbmMainWindowEvents {
             }
         })
 
-    $c.BtnConnect.Add_Click({ Invoke-TbmUiAction -Name 'Connect' -Action { [void](Connect-TbmFromUi) } })
+    $c.BtnConnect.Add_Click({ Invoke-TbmUiAction -Name 'Connect' -Action { $null = Connect-TbmFromUi } })
     $c.BtnDisconnect.Add_Click({
             Invoke-TbmUiAction -Name 'Disconnect' -Action {
                 Disconnect-TbmGraph -AuthState $script:TbmUi.AuthState
@@ -82,7 +82,7 @@ function Register-TbmMainWindowEvents {
                 $column = [string]$script:TbmUi.C.CmbRecipientColumn.SelectedItem
                 if ([string]::IsNullOrEmpty($column)) { return }
                 $script:TbmUi.RecipientColumn = $column
-                Invoke-TbmSuppressed { [void](Update-TbmRecipientValidation -Table $script:TbmUi.Table -RecipientColumn $column) }
+                Invoke-TbmSuppressed { $null = Update-TbmRecipientValidation -Table $script:TbmUi.Table -RecipientColumn $column }
                 Update-TbmRecipientSummary
                 Update-TbmPreview
             }
@@ -122,15 +122,15 @@ function Initialize-TbmMainWindowState {
     $ui = $script:TbmUi
     Set-TbmComboByTag -ComboBox $ui.C.CmbTransport -Value ([string]$ui.Settings.Transport)
     Set-TbmComboByTag -ComboBox $ui.C.CmbFormat -Value ([string]$ui.Settings.MessageFormat)
-    [void](Set-TbmPolicyLock -Control $ui.C.CmbTransport -SettingName 'Transport')
-    [void](Set-TbmPolicyLock -Control $ui.C.CmbFormat -SettingName 'MessageFormat')
+    $null = Set-TbmPolicyLock -Control $ui.C.CmbTransport -SettingName 'Transport'
+    $null = Set-TbmPolicyLock -Control $ui.C.CmbFormat -SettingName 'MessageFormat'
     Restore-TbmDraft
     Update-TbmTokenList
     Update-TbmConnectionDisplay
     Update-TbmPreview
 
     if ((Resolve-TbmAuthMode -Settings $ui.Settings) -eq 'GraphRest') {
-        $ui.C.TxtProgress.Text = 'Restoring Microsoft Graph session…'
+        $ui.C.TxtProgress.Text = 'Restoring Microsoft Graph session...'
         if (Connect-TbmGraphRestSilent -AuthState $ui.AuthState -Settings $ui.Settings) { Update-TbmConnectionDisplay; Update-TbmPreview }
         $ui.C.TxtProgress.Text = 'Ready.'
     }
@@ -172,7 +172,7 @@ function Connect-TbmFromUi {
         "  - Install the Graph PowerShell SDK:  Install-Module Microsoft.Graph.Authentication -Scope CurrentUser`n" +
         "  - Enter an Entra app registration Client ID in Settings (see README).`n`n" +
         'Until then you can still send with the deep-link options.'
-        [void](Show-TbmMessageBox -Text $text -Icon ([System.Windows.MessageBoxImage]::Information))
+        $null = Show-TbmMessageBox -Text $text -Icon ([System.Windows.MessageBoxImage]::Information)
         return $false
     }
 
@@ -211,7 +211,7 @@ function Update-TbmConnectionDisplay {
     }
     else {
         $ui.C.EllConnection.Fill = $converter.ConvertFromString('#F0B429')
-        $ui.C.TxtConnection.Text = 'Not connected to Graph · deep-link fallback available'
+        $ui.C.TxtConnection.Text = 'Not connected to Graph | deep-link fallback available'
         $ui.C.BtnConnect.Visibility = [System.Windows.Visibility]::Visible
         $ui.C.BtnDisconnect.Visibility = [System.Windows.Visibility]::Collapsed
     }
@@ -301,7 +301,7 @@ function Import-TbmUiRecipients {
     Set-TbmUiRecipientTable -Table $result.Table -RecipientColumn (Find-TbmRecipientColumn -Table $result.Table) -Sheets $result.Sheets -SheetName $result.SheetName -SourceLabel $Path
 
     if ($null -eq $ui.RecipientColumn) {
-        [void](Show-TbmMessageBox -Text 'No email column was recognised. Choose the column that holds Teams email addresses under "Recipient column".' -Icon ([System.Windows.MessageBoxImage]::Warning))
+        $null = Show-TbmMessageBox -Text 'No email column was recognised. Choose the column that holds Teams email addresses under "Recipient column".' -Icon ([System.Windows.MessageBoxImage]::Warning)
     }
 }
 
@@ -345,7 +345,7 @@ function Set-TbmUiRecipientTable {
         $controls.CmbRecipientColumn.ItemsSource = $script:TbmUi.ColumnNames
         $controls.CmbRecipientColumn.SelectedItem = $script:TbmUi.RecipientColumn
         if ($null -ne $script:TbmUi.RecipientColumn) {
-            [void](Update-TbmRecipientValidation -Table $script:TbmUi.Table -RecipientColumn $script:TbmUi.RecipientColumn)
+            $null = Update-TbmRecipientValidation -Table $script:TbmUi.Table -RecipientColumn $script:TbmUi.RecipientColumn
         }
         $controls.GridRecipients.ItemsSource = $null
         $controls.GridRecipients.ItemsSource = $script:TbmUi.Table.DefaultView
@@ -387,12 +387,12 @@ function Add-TbmManualRecipientsFromUi {
         return
     }
 
-    [void]$ui.C.GridRecipients.CommitEdit()
+    $null = $ui.C.GridRecipients.CommitEdit()
     $previous = $ui.Suppress
     $ui.Suppress = $true
     try {
         $result = Add-TbmManualEntriesToTable -Entries $choice.Entries -Table $ui.Table -RecipientColumn $ui.RecipientColumn
-        [void](Update-TbmRecipientValidation -Table $ui.Table -RecipientColumn $ui.RecipientColumn)
+        $null = Update-TbmRecipientValidation -Table $ui.Table -RecipientColumn $ui.RecipientColumn
     }
     finally {
         $ui.Suppress = $previous
@@ -475,7 +475,7 @@ function Set-TbmAllIncluded {
     )
     $ui = $script:TbmUi
     if ($null -eq $ui.Table) { return }
-    [void]$ui.C.GridRecipients.CommitEdit()
+    $null = $ui.C.GridRecipients.CommitEdit()
     Invoke-TbmSuppressed {
         foreach ($row in $script:TbmUi.Table.Rows) {
             $status = [string]$row[$script:TbmStatusColumn]
@@ -500,11 +500,13 @@ function Update-TbmRecipientSummary {
             'Duplicate' { $duplicates++ }
         }
     }
-    $text = '{0} row(s) · {1} selected' -f $ui.Table.Rows.Count, $selected
-    if ($invalid -gt 0) { $text += ' · {0} invalid email' -f $invalid }
-    if ($duplicates -gt 0) { $text += ' · {0} duplicate' -f $duplicates }
-    if ($null -ne $ui.RecipientColumn) { $text += ' · sending to column "{0}"' -f $ui.RecipientColumn }
-    $ui.C.TxtRecipientSummary.Text = $text
+    $parts = [System.Collections.Generic.List[string]]::new()
+    $parts.Add(('{0} row(s)' -f $ui.Table.Rows.Count))
+    $parts.Add(('{0} selected' -f $selected))
+    if ($invalid -gt 0) { $parts.Add(('{0} invalid email' -f $invalid)) }
+    if ($duplicates -gt 0) { $parts.Add(('{0} duplicate' -f $duplicates)) }
+    if ($null -ne $ui.RecipientColumn) { $parts.Add(('sending to column "{0}"' -f $ui.RecipientColumn)) }
+    $ui.C.TxtRecipientSummary.Text = [string]::Join(' | ', $parts)
 }
 
 function Get-TbmIncludedRows {
@@ -519,8 +521,8 @@ function Get-TbmIncludedRows {
     $ui = $script:TbmUi
     $rows = [System.Collections.Generic.List[System.Data.DataRow]]::new()
     if ($null -eq $ui.Table -or $null -eq $ui.RecipientColumn) { return , $rows }
-    [void]$ui.C.GridRecipients.CommitEdit()
-    [void]$ui.C.GridRecipients.CommitEdit()
+    $null = $ui.C.GridRecipients.CommitEdit()
+    $null = $ui.C.GridRecipients.CommitEdit()
     foreach ($row in $ui.Table.Rows) {
         if ($row.HasVersion([System.Data.DataRowVersion]::Proposed)) { $row.EndEdit() }
         if (-not [bool]$row[$script:TbmIncludeColumn]) { continue }
@@ -555,7 +557,7 @@ function Add-TbmTokenAtCaret {
     $box.SelectedText = $token
     $box.SelectionLength = 0
     $box.CaretIndex = $start + $token.Length
-    [void]$box.Focus()
+    $null = $box.Focus()
 }
 
 function Get-TbmUiFormat {
@@ -756,7 +758,7 @@ function New-TbmSendPlan {
                 $messagesWithMissing++
                 foreach ($name in $expanded.MissingTokens) {
                     $count = 0
-                    [void]$missingCounts.TryGetValue($name, [ref]$count)
+                    $null = $missingCounts.TryGetValue($name, [ref]$count)
                     $missingCounts[$name] = $count + 1
                 }
             }
@@ -815,20 +817,21 @@ function Start-TbmSendFromUi {
     $blast = $plan.Blast
     $label = Get-TbmTransportLabel -Transport $blast.Transport
 
+    $paragraphs = [System.Collections.Generic.List[string]]::new()
     if ($blast.Mode -eq 'Group') {
         $topic = ''
         if (-not [string]::IsNullOrEmpty($blast.Topic)) { $topic = ' named "{0}"' -f $blast.Topic }
-        $text = 'Create one group chat{0} with {1} people and send the message via {2}?' -f $topic, $blast.RecipientCount, $label
+        $paragraphs.Add(('Create one group chat{0} with {1} people and send the message via {2}?' -f $topic, $blast.RecipientCount, $label))
     }
     else {
-        $text = 'Send {0} individual message(s) via {1}?' -f $blast.RecipientCount, $label
+        $paragraphs.Add(('Send {0} individual message(s) via {1}?' -f $blast.RecipientCount, $label))
     }
     switch ($blast.Transport) {
-        { $_ -like 'Graph*' } { $text += "`n`nMessages are sent as {0} ({1})." -f $ui.AuthState.MeName, $ui.AuthState.MeUpn }
-        'DeepLinkAuto' { $text += "`n`nTeams opens each chat and Enter is pressed after {0} seconds. Don't use the keyboard or mouse until it finishes (Cancel stops it)." -f $ui.Settings.DeepLinkSendDelaySeconds }
-        'DeepLinkManual' { $text += "`n`nEach chat opens in Teams with the message filled in. Check it, press Send in Teams, then click 'Sent – Next' here." }
+        { $_ -like 'Graph*' } { $paragraphs.Add(('Messages are sent as {0} ({1}).' -f $ui.AuthState.MeName, $ui.AuthState.MeUpn)) }
+        'DeepLinkAuto' { $paragraphs.Add(("Teams opens each chat and Enter is pressed after {0} seconds. Don't use the keyboard or mouse until it finishes (Cancel stops it)." -f $ui.Settings.DeepLinkSendDelaySeconds)) }
+        'DeepLinkManual' { $paragraphs.Add("Each chat opens in Teams with the message filled in. Check it, press Send in Teams, then click 'Sent - Next' here.") }
     }
-    if (-not (Confirm-TbmAction -Text $text)) { return }
+    if (-not (Confirm-TbmAction -Text ([string]::Join("`n`n", $paragraphs)))) { return }
     Start-TbmBlastRun -Plan $plan
 }
 
@@ -902,7 +905,7 @@ function Start-TbmBlastRun {
 
     $ui = $script:TbmUi
     $blast = [TeamsBlastMessenger.TbmBlastRecord]$Plan.Blast
-    if ($blast.Transport -like 'Graph*') { [void](Get-TbmAccessToken -AuthState $ui.AuthState) }
+    if ($blast.Transport -like 'Graph*') { $null = Get-TbmAccessToken -AuthState $ui.AuthState }
 
     $sync = New-TbmSyncState
     $job = @{ Blast = $blast; Items = $Plan.Items; Settings = $ui.Settings.Clone(); AuthState = $ui.AuthState; Sync = $sync }
@@ -919,7 +922,7 @@ function Start-TbmBlastRun {
     }
     else {
         $ui.Job = Start-TbmBackgroundJob -CommandName 'Invoke-TbmSendWorker' -Job $job
-        $ui.C.TxtProgress.Text = 'Sending to {0} recipient(s)…' -f $blast.RecipientCount
+        $ui.C.TxtProgress.Text = 'Sending to {0} recipient(s)...' -f $blast.RecipientCount
     }
 }
 
@@ -934,7 +937,7 @@ function Stop-TbmCurrentSend {
     if ($null -ne $ui.Sync) {
         $ui.Sync['Cancel'] = $true
         $ui.C.BtnCancel.IsEnabled = $false
-        $ui.C.TxtProgress.Text = 'Cancelling after the current recipient…'
+        $ui.C.TxtProgress.Text = 'Cancelling after the current recipient...'
         Write-TbmLog -Level Info -Source 'Send' -Message 'Cancellation requested.'
     }
 }
@@ -1029,7 +1032,7 @@ function Open-TbmManualStep {
 
     $who = $emails[0]
     if ($emails.Count -gt 1) { $who = '{0} people' -f $emails.Count }
-    $ui.C.TxtProgress.Text = '{0} of {1}: {2}. Check the message in Teams, press Send there, then click "Sent – Next".' -f ($manual.Position + 1), $manual.Steps.Count, $who
+    $ui.C.TxtProgress.Text = '{0} of {1}: {2}. Check the message in Teams, press Send there, then click "Sent - Next".' -f ($manual.Position + 1), $manual.Steps.Count, $who
 }
 
 function Complete-TbmManualStep {
@@ -1103,7 +1106,7 @@ function Invoke-TbmMainTimerTick {
                     if ($item.Status -eq 'Failed') { $ui.Progress.Failed++ }
                     $ui.C.PrgSend.Value = [System.Math]::Min($ui.C.PrgSend.Maximum, $ui.Progress.Done)
                     if ($null -eq $ui.Manual) {
-                        $ui.C.TxtProgress.Text = '{0} of {1} processed · {2} sent · {3} failed' -f $ui.Progress.Done, $ui.Progress.Total, $ui.Progress.Sent, $ui.Progress.Failed
+                        $ui.C.TxtProgress.Text = '{0} of {1} processed | {2} sent | {3} failed' -f $ui.Progress.Done, $ui.Progress.Total, $ui.Progress.Sent, $ui.Progress.Failed
                     }
                 }
                 'Done' { Complete-TbmRunUi -DoneEvent $item }
@@ -1154,7 +1157,7 @@ function Update-TbmLogPane {
         if ($newline -gt 0) { $line = $line.Substring(0, $newline).TrimEnd() + ' (details in log file)' }
         $ui.LogLines.Enqueue($line)
     }
-    while ($ui.LogLines.Count -gt 800) { [void]$ui.LogLines.Dequeue() }
+    while ($ui.LogLines.Count -gt 800) { $null = $ui.LogLines.Dequeue() }
     $ui.C.TxtLog.Text = [string]::Join([System.Environment]::NewLine, $ui.LogLines.ToArray())
     $ui.C.TxtLog.ScrollToEnd()
 }
@@ -1199,7 +1202,7 @@ function Invoke-TbmDryRun {
     $lines.Add(('  Longest message: {0} characters' -f $longest))
     $lines.Add(('  Would send via: {0}' -f (Get-TbmTransportLabel -Transport (Resolve-TbmUiTransport))))
     Write-TbmLog -Level Info -Source 'DryRun' -Message ('Dry run: {0} ready, {1} with blank values.' -f $ready, $missing)
-    [void](Show-TbmMessageBox -Text ([string]::Join("`n", $lines)) -Title 'Dry run')
+    $null = Show-TbmMessageBox -Text ([string]::Join("`n", $lines)) -Title 'Dry run'
 }
 
 function Show-TbmHistoryFromUi {
@@ -1232,7 +1235,7 @@ function Open-TbmLatestInteractions {
         }
     }
     if ($null -eq $blast) {
-        [void](Show-TbmMessageBox -Text 'There are no sent blasts yet. Send one first, or open History to pick an older blast.')
+        $null = Show-TbmMessageBox -Text 'There are no sent blasts yet. Send one first, or open History to pick an older blast.'
         return
     }
     Open-TbmInteractions -Blast $blast -Owner $ui.Window

@@ -7,11 +7,11 @@
 
 BeforeAll {
     $script:TestRoot = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), 'tbm-tests-' + [guid]::NewGuid().ToString('N'))
-    [void][System.IO.Directory]::CreateDirectory($script:TestRoot)
+    $null = [System.IO.Directory]::CreateDirectory($script:TestRoot)
     [System.Environment]::SetEnvironmentVariable('TBM_APPDATA', [System.IO.Path]::Combine($script:TestRoot, 'appdata'))
     $script:ProjectRoot = [System.IO.Path]::GetDirectoryName($PSScriptRoot)
     Import-Module ([System.IO.Path]::Combine($script:ProjectRoot, 'TeamsBlastMessenger.psd1')) -Force
-    InModuleScope TeamsBlastMessenger { [void](Initialize-TbmEnvironment) }
+    InModuleScope TeamsBlastMessenger { $null = Initialize-TbmEnvironment }
 }
 
 AfterAll {
@@ -67,12 +67,13 @@ Describe 'Recipient files' {
         InModuleScope TeamsBlastMessenger -Parameters @{ Root = $script:TestRoot } {
             param($Root)
             $path = [System.IO.Path]::Combine($Root, 'semi.csv')
-            $text = "Email;First Name;Note`r`nzoë@contoso.com;Zoë;""multi`r`nline; with semicolon""`r`n;;`r`nbad;Bad;x`r`n"
+            $zoe = 'Zo' + [char]0x00EB
+            $text = "Email;First Name;Note`r`n$($zoe.ToLowerInvariant())@contoso.com;$zoe;""multi`r`nline; with semicolon""`r`n;;`r`nbad;Bad;x`r`n"
             [System.IO.File]::WriteAllText($path, $text, [System.Text.UTF8Encoding]::new($true))
             $result = Import-TbmRecipientFile -Path $path
             $table = $result.Table
             $table.Rows.Count | Should -Be 2
-            $table.Rows[0]['First Name'] | Should -Be 'Zoë'
+            $table.Rows[0]['First Name'] | Should -Be $zoe
             $table.Rows[0]['Note'] | Should -Be "multi`r`nline; with semicolon"
             Find-TbmRecipientColumn -Table $table | Should -Be 'Email'
             $summary = Update-TbmRecipientValidation -Table $table -RecipientColumn 'Email'
@@ -308,9 +309,9 @@ Describe 'Settings and organization policy' {
             $nsl = [System.Xml.XmlNamespaceManager]::new($adml.NameTable); $nsl.AddNamespace('p', 'http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions')
 
             $strings = [System.Collections.Generic.HashSet[string]]::new()
-            foreach ($node in $adml.SelectNodes('//p:stringTable/p:string', $nsl)) { [void]$strings.Add($node.GetAttribute('id')) }
+            foreach ($node in $adml.SelectNodes('//p:stringTable/p:string', $nsl)) { $null = $strings.Add($node.GetAttribute('id')) }
             $presentations = [System.Collections.Generic.HashSet[string]]::new()
-            foreach ($node in $adml.SelectNodes('//p:presentationTable/p:presentation', $nsl)) { [void]$presentations.Add($node.GetAttribute('id')) }
+            foreach ($node in $adml.SelectNodes('//p:presentationTable/p:presentation', $nsl)) { $null = $presentations.Add($node.GetAttribute('id')) }
             foreach ($match in [System.Text.RegularExpressions.Regex]::Matches($admx.OuterXml, '\$\((string|presentation)\.([A-Za-z0-9_]+)\)')) {
                 if ($match.Groups[1].Value -eq 'string') { $strings.Contains($match.Groups[2].Value) | Should -BeTrue -Because $match.Value }
                 else { $presentations.Contains($match.Groups[2].Value) | Should -BeTrue -Because $match.Value }
@@ -537,7 +538,7 @@ Describe 'Interaction tracking' {
             $messages.Add((New-TestMessage -Id 'm1' -From 'me' -Created '2026-11-17T09:05:00.000Z' -Html 'my follow-up'))
             $messages.Add((New-TestMessage -Id 'm0' -From 'ua' -Created '2026-11-17T08:59:00.000Z' -Html 'before the blast'))
             $messages.Add((New-TestMessage -Id 'sys' -From 'ua' -Created '2026-11-17T09:20:00.000Z' -Html '' -Type 'systemEventMessage'))
-            $ids = [System.Collections.Generic.HashSet[string]]::new(); [void]$ids.Add('blast1')
+            $ids = [System.Collections.Generic.HashSet[string]]::new(); $null = $ids.Add('blast1')
             $reactions = [System.Collections.Generic.Dictionary[string, string]]::new(); $reactions['ua'] = 'like'
 
             Set-TbmInteractionReplies -Results $results -Messages $messages -MeId 'me' -BlastMessageIds $ids -Reactions $reactions
@@ -633,10 +634,11 @@ Describe 'XAML and UI wiring' {
         foreach ($file in [System.IO.Directory]::GetFiles($xamlFolder, '*.xaml')) {
             $document = [System.Xml.XmlDocument]::new()
             { $document.LoadXml([System.IO.File]::ReadAllText($file)) } | Should -Not -Throw
-            foreach ($node in $document.SelectNodes('//*[@Name]')) { [void]$names.Add($node.GetAttribute('Name')) }
+            foreach ($node in $document.SelectNodes('//*[@Name]')) { $null = $names.Add($node.GetAttribute('Name')) }
         }
-        $code = ''
-        foreach ($file in [System.IO.Directory]::GetFiles([System.IO.Path]::Combine($script:ProjectRoot, 'Private'), 'Ui*.ps1')) { $code += [System.IO.File]::ReadAllText($file) }
+        $codeBuilder = [System.Text.StringBuilder]::new()
+        foreach ($file in [System.IO.Directory]::GetFiles([System.IO.Path]::Combine($script:ProjectRoot, 'Private'), 'Ui*.ps1')) { $null = $codeBuilder.Append([System.IO.File]::ReadAllText($file)) }
+        $code = $codeBuilder.ToString()
         $missing = [System.Collections.Generic.List[string]]::new()
         foreach ($match in [System.Text.RegularExpressions.Regex]::Matches($code, '\b(?:C|Controls|c)\.((?:Btn|Txt|Cmb|Grid|Lst|Rad|Prg|Ell|Chk)[A-Za-z]+)')) {
             $name = $match.Groups[1].Value
@@ -647,5 +649,59 @@ Describe 'XAML and UI wiring' {
             if (-not $names.Contains($name) -and -not $missing.Contains($name)) { $missing.Add($name) }
         }
         $missing | Should -BeNullOrEmpty
+    }
+}
+
+Describe 'Coding standards' {
+    BeforeAll {
+        $script:SourceFiles = [System.Collections.Generic.List[string]]::new()
+        $script:ScriptFiles = [System.Collections.Generic.List[string]]::new()
+        $skip = [System.IO.Path]::DirectorySeparatorChar + '.git' + [System.IO.Path]::DirectorySeparatorChar
+        foreach ($file in [System.IO.Directory]::GetFiles($script:ProjectRoot, '*', [System.IO.SearchOption]::AllDirectories)) {
+            if ($file.Contains($skip)) { continue }
+            $script:SourceFiles.Add($file)
+            $extension = [System.IO.Path]::GetExtension($file).ToLowerInvariant()
+            if ($extension -eq '.ps1' -or $extension -eq '.psm1' -or $extension -eq '.psd1') { $script:ScriptFiles.Add($file) }
+        }
+
+        function Get-TbmStandardsViolation {
+            param([string]$Pattern)
+            $found = [System.Collections.Generic.List[string]]::new()
+            $regex = [System.Text.RegularExpressions.Regex]::new($Pattern)
+            foreach ($file in $script:ScriptFiles) {
+                $lines = [System.IO.File]::ReadAllLines($file)
+                for ($i = 0; $i -lt $lines.Length; $i++) {
+                    $trimmed = $lines[$i].TrimStart()
+                    if ($trimmed.StartsWith('#')) { continue }
+                    if ($regex.IsMatch($lines[$i])) { $found.Add(('{0}:{1}: {2}' -f [System.IO.Path]::GetFileName($file), ($i + 1), $trimmed)) }
+                }
+            }
+            return , $found
+        }
+    }
+
+    It 'keeps every source file ASCII (an optional UTF-8 BOM is allowed)' {
+        $offenders = [System.Collections.Generic.List[string]]::new()
+        foreach ($file in $script:SourceFiles) {
+            $bytes = [System.IO.File]::ReadAllBytes($file)
+            $start = 0
+            if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) { $start = 3 }
+            for ($i = $start; $i -lt $bytes.Length; $i++) {
+                if ($bytes[$i] -gt 0x7F) { $offenders.Add(('{0} (byte {1})' -f $file, $i)); break }
+            }
+        }
+        $offenders | Should -BeNullOrEmpty
+    }
+
+    It 'discards output by assigning to $null, never with a void cast' {
+        Get-TbmStandardsViolation -Pattern '\[void\]' | Should -BeNullOrEmpty
+    }
+
+    It 'does not build strings or arrays with the add-assign operator' {
+        Get-TbmStandardsViolation -Pattern '\+=\s*[''"@(\[]' | Should -BeNullOrEmpty
+    }
+
+    It 'does not pipe into Out-Null, ForEach-Object, Where-Object, Select-Object or Sort-Object' {
+        Get-TbmStandardsViolation -Pattern '\|\s*(?:Out-Null|ForEach-Object|Where-Object|Select-Object|Sort-Object|%|\?)(?:\s|$)' | Should -BeNullOrEmpty
     }
 }

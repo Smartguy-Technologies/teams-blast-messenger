@@ -43,8 +43,8 @@
                     <ComboBox Name="CmbTransport" Width="260" SelectedIndex="0">
                         <ComboBoxItem Tag="Auto" Content="Auto (Graph if connected, else deep link)"/>
                         <ComboBoxItem Tag="Graph" Content="Microsoft Graph"/>
-                        <ComboBoxItem Tag="DeepLinkManual" Content="Deep link – I press Send"/>
-                        <ComboBoxItem Tag="DeepLinkAuto" Content="Deep link – auto press Enter"/>
+                        <ComboBoxItem Tag="DeepLinkManual" Content="Deep link - I press Send"/>
+                        <ComboBoxItem Tag="DeepLinkAuto" Content="Deep link - auto press Enter"/>
                     </ComboBox>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Vertical" VerticalAlignment="Center" Margin="18,0">
@@ -52,7 +52,7 @@
                     <ProgressBar Name="PrgSend" Height="6" Margin="0,4,0,0" Minimum="0" Maximum="1" Value="0" Foreground="#5B5FC7"/>
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
-                    <Button Name="BtnManualNext" Content="Sent – Next" Style="{StaticResource PrimaryButton}" Visibility="Collapsed" ToolTip="I sent the message in Teams; open the next recipient"/>
+                    <Button Name="BtnManualNext" Content="Sent - Next" Style="{StaticResource PrimaryButton}" Visibility="Collapsed" ToolTip="I sent the message in Teams; open the next recipient"/>
                     <Button Name="BtnManualSkip" Content="Skip" Visibility="Collapsed"/>
                     <Button Name="BtnPreviewAll" Content="Dry run" ToolTip="Render every selected message and flag problems without sending"/>
                     <Button Name="BtnTest" Content="Test send" ToolTip="Send the previewed message to your test recipient (Settings) or yourself"/>
@@ -85,11 +85,11 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBox Name="TxtFile" IsReadOnly="True" Text="Import a CSV or Excel file (recommended)…" Foreground="#616673"/>
+                        <TextBox Name="TxtFile" IsReadOnly="True" Text="Import a CSV or Excel file (recommended)..." Foreground="#616673"/>
                         <StackPanel Grid.Column="1" Orientation="Horizontal">
-                            <Button Name="BtnBrowse" Content="Import CSV / Excel…" Style="{StaticResource PrimaryButton}" ToolTip="Recommended: load recipients and personalization columns from a spreadsheet"/>
+                            <Button Name="BtnBrowse" Content="Import CSV / Excel..." Style="{StaticResource PrimaryButton}" ToolTip="Recommended: load recipients and personalization columns from a spreadsheet"/>
                             <Button Name="BtnReload" Content="Reload" IsEnabled="False"/>
-                            <Button Name="BtnAddManual" Content="Add manually…" ToolTip="Type or paste names and email addresses (added to the current list or as a new list)"/>
+                            <Button Name="BtnAddManual" Content="Add manually..." ToolTip="Type or paste names and email addresses (added to the current list or as a new list)"/>
                         </StackPanel>
                     </Grid>
                     <WrapPanel Grid.Row="2" Margin="0,8,0,0">

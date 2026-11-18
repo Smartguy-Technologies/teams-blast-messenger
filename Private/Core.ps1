@@ -42,7 +42,7 @@ function Initialize-TbmEnvironment {
     param()
 
     foreach ($name in @('Root', 'Logs', 'History', 'Cache', 'Exports')) {
-        [void][System.IO.Directory]::CreateDirectory((Get-TbmAppDataPath -Name $name))
+        $null = [System.IO.Directory]::CreateDirectory((Get-TbmAppDataPath -Name $name))
     }
 
     # Start the log first so policy and settings warnings reach the log file.
@@ -52,7 +52,7 @@ function Initialize-TbmEnvironment {
     $settings = Get-TbmSettings
     Write-TbmPolicySummary
     $level = [TeamsBlastMessenger.TbmLogLevel]::Info
-    [void][System.Enum]::TryParse([string]$settings.LogLevel, $true, [ref]$level)
+    $null = [System.Enum]::TryParse([string]$settings.LogLevel, $true, [ref]$level)
     [TeamsBlastMessenger.TbmLogger]::MinimumLevel = $level
     [TeamsBlastMessenger.TbmLogger]::Purge([int]$settings.LogRetentionDays)
     return $settings
@@ -531,7 +531,7 @@ function Write-TbmTextFileAtomic {
     )
 
     $directory = [System.IO.Path]::GetDirectoryName($Path)
-    [void][System.IO.Directory]::CreateDirectory($directory)
+    $null = [System.IO.Directory]::CreateDirectory($directory)
     $tempPath = $Path + '.tmp'
     [System.IO.File]::WriteAllText($tempPath, $Content, [System.Text.UTF8Encoding]::new($false))
     if ([System.IO.File]::Exists($Path)) {
@@ -566,11 +566,11 @@ function Write-TbmCsvFile {
     $builder = [System.Text.StringBuilder]::new()
     $fields = [System.Collections.Generic.List[string]]::new()
     foreach ($name in $Header) { $fields.Add([TeamsBlastMessenger.TbmText]::CsvField($name)) }
-    [void]$builder.AppendLine([string]::Join(',', $fields))
+    $null = $builder.AppendLine([string]::Join(',', $fields))
     foreach ($row in $Rows) {
         $fields.Clear()
         foreach ($value in $row) { $fields.Add([TeamsBlastMessenger.TbmText]::CsvField($value)) }
-        [void]$builder.AppendLine([string]::Join(',', $fields))
+        $null = $builder.AppendLine([string]::Join(',', $fields))
     }
     [System.IO.File]::WriteAllText($Path, $builder.ToString(), [System.Text.UTF8Encoding]::new($true))
     Write-TbmLog -Level Info -Source 'Export' -Message ('Exported {0} row(s) to {1}' -f $Rows.Count, $Path)

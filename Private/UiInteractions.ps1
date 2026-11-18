@@ -17,7 +17,7 @@ function Open-TbmInteractions {
     )
 
     if ($Blast.SentCount -eq 0) {
-        [void](Show-TbmMessageBox -Text 'No messages in this blast were sent, so there are no replies to look for.' -Owner $Owner)
+        $null = Show-TbmMessageBox -Text 'No messages in this blast were sent, so there are no replies to look for.' -Owner $Owner
         return
     }
     if (-not (Test-TbmGraphConnected -AuthState $script:TbmUi.AuthState) -and $Blast.Interactions.Count -eq 0) {
@@ -70,7 +70,7 @@ function Show-TbmInteractionsWindow {
             if (-not (Confirm-TbmAction -Text 'Microsoft Graph is not connected. Connect now?')) { return }
             if (-not (Connect-TbmFromUi)) { return }
         }
-        [void](Get-TbmAccessToken -AuthState $script:TbmUi.AuthState)
+        $null = Get-TbmAccessToken -AuthState $script:TbmUi.AuthState
         $view.Sync = New-TbmSyncState
         $job = @{ Blast = $view.Blast; AuthState = $script:TbmUi.AuthState; Settings = $script:TbmUi.Settings.Clone(); Sync = $view.Sync }
         $view.Job = Start-TbmBackgroundJob -CommandName 'Invoke-TbmInteractionWorker' -Job $job
@@ -78,7 +78,7 @@ function Show-TbmInteractionsWindow {
         $controls.BtnScan.IsEnabled = $false
         $controls.BtnCancelScan.IsEnabled = $true
         $controls.PrgScan.IsIndeterminate = $true
-        $controls.TxtProgress.Text = 'Reading chats…'
+        $controls.TxtProgress.Text = 'Reading chats...'
         $view.Timer.Start()
     }
 
@@ -123,7 +123,7 @@ function Show-TbmInteractionsWindow {
     $c.BtnCancelScan.Add_Click({
             if ($null -ne $interactionView.Sync) {
                 $interactionView.Sync['Cancel'] = $true
-                $interactionView.Ui.Controls.TxtProgress.Text = 'Cancelling…'
+                $interactionView.Ui.Controls.TxtProgress.Text = 'Cancelling...'
             }
         })
     $c.BtnClose.Add_Click({ $interactionView.Ui.Window.Close() })
@@ -141,10 +141,10 @@ function Show-TbmInteractionsWindow {
             if ($null -eq $result) { $box.Text = ''; return }
             $interactionView.Ui.Controls.TxtRepliesTitle.Text = 'All replies from ' + $result.Recipient
             if ($result.Replies.Count -eq 0) {
-                $note = 'No replies since the message was sent.'
-                if (-not [string]::IsNullOrEmpty($result.Error)) { $note = $result.Error }
-                if (-not [string]::IsNullOrEmpty($result.Reactions)) { $note += ' Reacted: ' + $result.Reactions }
-                $box.Text = $note
+                $notes = [System.Collections.Generic.List[string]]::new()
+                if ([string]::IsNullOrEmpty($result.Error)) { $notes.Add('No replies since the message was sent.') } else { $notes.Add($result.Error) }
+                if (-not [string]::IsNullOrEmpty($result.Reactions)) { $notes.Add('Reacted: ' + $result.Reactions) }
+                $box.Text = [string]::Join(' ', $notes)
                 return
             }
             $builder = [System.Text.StringBuilder]::new()
@@ -152,8 +152,8 @@ function Show-TbmInteractionsWindow {
                 $elapsed = [TeamsBlastMessenger.TbmText]::FormatDuration($reply.CreatedUtc - [datetime]$result.SentUtc)
                 $quoted = ''
                 if ($reply.IsDirectReply) { $quoted = '  (quoted your message)' }
-                [void]$builder.AppendFormat('[{0}  +{1}] {2}{3}', $reply.CreatedLocal, $elapsed, $reply.FromName, $quoted).AppendLine()
-                [void]$builder.AppendLine($reply.Text).AppendLine()
+                $null = $builder.AppendFormat('[{0}  +{1}] {2}{3}', $reply.CreatedLocal, $elapsed, $reply.FromName, $quoted).AppendLine()
+                $null = $builder.AppendLine($reply.Text).AppendLine()
             }
             $box.Text = $builder.ToString()
         })
@@ -171,7 +171,7 @@ function Show-TbmInteractionsWindow {
                 if ($null -eq $interactionView.Blast.LastInteractionCheckUtc) { & $interactionView.Start }
             }
         })
-    [void]$ui.Window.ShowDialog()
+    $null = $ui.Window.ShowDialog()
 }
 
 #endregion

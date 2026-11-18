@@ -137,7 +137,7 @@ function Invoke-TbmInteractionScan {
     foreach ($recipient in $Blast.Recipients) {
         if ([string]::IsNullOrEmpty($recipient.ChatId) -or [string]::IsNullOrEmpty($recipient.MessageId)) { continue }
         if (-not $messageIdsByChat.ContainsKey($recipient.ChatId)) { $messageIdsByChat[$recipient.ChatId] = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal) }
-        [void]$messageIdsByChat[$recipient.ChatId].Add($recipient.MessageId)
+        $null = $messageIdsByChat[$recipient.ChatId].Add($recipient.MessageId)
     }
 
     $chatNumber = 0
@@ -480,15 +480,15 @@ function Find-TbmGroupChat {
     )
 
     $expected = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    [void]$expected.Add([string]$AuthState.MeId)
-    foreach ($result in $Results) { if (-not [string]::IsNullOrEmpty($result.UserId)) { [void]$expected.Add($result.UserId) } }
+    $null = $expected.Add([string]$AuthState.MeId)
+    foreach ($result in $Results) { if (-not [string]::IsNullOrEmpty($result.UserId)) { $null = $expected.Add($result.UserId) } }
 
     $bestId = $null
     $bestScore = -1
     foreach ($chat in (Get-TbmMyChats -AuthState $AuthState -ChatType group -Settings $Settings -Sync $Sync)) {
         $memberIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
         $members = Get-TbmPropertyValue -InputObject $chat -Name 'members'
-        if ($null -ne $members) { foreach ($member in $members) { [void]$memberIds.Add([string](Get-TbmPropertyValue -InputObject $member -Name 'userId')) } }
+        if ($null -ne $members) { foreach ($member in $members) { $null = $memberIds.Add([string](Get-TbmPropertyValue -InputObject $member -Name 'userId')) } }
         if (-not $memberIds.SetEquals($expected)) { continue }
 
         $score = 1
@@ -522,11 +522,12 @@ function Get-TbmInteractionSummary {
         if (-not [string]::IsNullOrEmpty($result.Reactions)) { $reacted++ }
     }
     $rate = [double]$responded / $Results.Count
-    $summary = '{0} of {1} responded ({2:P0}). {3} reacted.' -f $responded, $Results.Count, $rate, $reacted
+    $sentences = [System.Collections.Generic.List[string]]::new()
+    $sentences.Add(('{0} of {1} responded ({2:P0}). {3} reacted.' -f $responded, $Results.Count, $rate, $reacted))
     if ($times.Count -gt 0) {
-        $summary += ' Average response {0}, median {1}.' -f [TeamsBlastMessenger.TbmText]::FormatDuration([TeamsBlastMessenger.TbmText]::Average($times)), [TeamsBlastMessenger.TbmText]::FormatDuration([TeamsBlastMessenger.TbmText]::Median($times))
+        $sentences.Add(('Average response {0}, median {1}.' -f [TeamsBlastMessenger.TbmText]::FormatDuration([TeamsBlastMessenger.TbmText]::Average($times)), [TeamsBlastMessenger.TbmText]::FormatDuration([TeamsBlastMessenger.TbmText]::Median($times))))
     }
-    return $summary
+    return [string]::Join(' ', $sentences)
 }
 
 #endregion

@@ -50,7 +50,7 @@
     $script:TbmUi.Timer.Start()
 
     try {
-        [void]$ui.Window.ShowDialog()
+        $null = $ui.Window.ShowDialog()
     }
     finally {
         $script:TbmUi.Timer.Stop()

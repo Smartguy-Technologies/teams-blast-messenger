@@ -65,7 +65,7 @@ function Show-TbmHistoryWindow {
                 $blast = $historyView.Ui.Controls.GridBlasts.SelectedItem -as [TeamsBlastMessenger.TbmBlastRecord]
                 if ($null -eq $blast) { return }
                 if ((Get-TbmRetryableRecipients -Blast $blast).Count -eq 0) {
-                    [void](Show-TbmMessageBox -Text 'Every recipient in this blast was sent or skipped; there is nothing to retry.' -Owner $historyView.Ui.Window)
+                    $null = Show-TbmMessageBox -Text 'Every recipient in this blast was sent or skipped; there is nothing to retry.' -Owner $historyView.Ui.Window
                     return
                 }
                 $historyView.Result = @{ Action = 'Retry'; Blast = $blast }
@@ -100,7 +100,7 @@ function Show-TbmHistoryWindow {
         })
 
     $ui.Window.Add_Loaded({ Invoke-TbmUiAction -Name 'Load history' -Action { & $historyView.Refresh } })
-    [void]$ui.Window.ShowDialog()
+    $null = $ui.Window.ShowDialog()
     return $historyView.Result
 }
 

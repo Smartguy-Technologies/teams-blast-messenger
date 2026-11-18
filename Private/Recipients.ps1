@@ -109,7 +109,7 @@ function ConvertTo-TbmRecipientTable {
         }
     }
     $headers = Get-TbmUniqueHeaderNames -Header $Rows[$headerIndex] -Width $width
-    foreach ($header in $headers) { [void]$table.Columns.Add($header, [string]) }
+    foreach ($header in $headers) { $null = $table.Columns.Add($header, [string]) }
 
     $table.BeginLoadData()
     try {
@@ -168,8 +168,8 @@ function Get-TbmUniqueHeaderNames {
 
     $names = [System.Collections.Generic.List[string]]::new()
     $used = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    [void]$used.Add($script:TbmIncludeColumn)
-    [void]$used.Add($script:TbmStatusColumn)
+    $null = $used.Add($script:TbmIncludeColumn)
+    $null = $used.Add($script:TbmStatusColumn)
     for ($i = 0; $i -lt $Width; $i++) {
         $name = ''
         if ($i -lt $Header.Length -and $null -ne $Header[$i]) { $name = $Header[$i].Trim() }
@@ -333,7 +333,7 @@ function Get-TbmTextFileEncoding {
     if ($Bytes.Length -ge 2 -and $Bytes[0] -eq 0xFE -and $Bytes[1] -eq 0xFF) { return [System.Text.Encoding]::BigEndianUnicode }
     try {
         $strict = [System.Text.UTF8Encoding]::new($false, $true)
-        [void]$strict.GetString($Bytes)
+        $null = $strict.GetString($Bytes)
         return [System.Text.UTF8Encoding]::new($false)
     }
     catch {
@@ -687,9 +687,9 @@ function Get-TbmXlsxRichText {
 
     $builder = [System.Text.StringBuilder]::new()
     foreach ($child in $Node.ChildNodes) {
-        if ($child.LocalName -eq 't') { [void]$builder.Append($child.InnerText) }
+        if ($child.LocalName -eq 't') { $null = $builder.Append($child.InnerText) }
         elseif ($child.LocalName -eq 'r') {
-            foreach ($run in $child.ChildNodes) { if ($run.LocalName -eq 't') { [void]$builder.Append($run.InnerText) } }
+            foreach ($run in $child.ChildNodes) { if ($run.LocalName -eq 't') { $null = $builder.Append($run.InnerText) } }
         }
     }
     return $builder.ToString()
@@ -720,9 +720,9 @@ function Read-TbmXlsxStyleKinds {
     }
     foreach ($xf in $document.SelectNodes('/m:styleSheet/m:cellXfs/m:xf', $ns)) {
         $formatId = 0
-        [void][int]::TryParse($xf.GetAttribute('numFmtId'), [ref]$formatId)
+        $null = [int]::TryParse($xf.GetAttribute('numFmtId'), [ref]$formatId)
         $code = $null
-        [void]$customFormats.TryGetValue($formatId, [ref]$code)
+        $null = $customFormats.TryGetValue($formatId, [ref]$code)
         $kinds.Add((Get-TbmNumberFormatKind -FormatId $formatId -FormatCode $code))
     }
     return , $kinds
@@ -887,7 +887,7 @@ function Read-TbmWorkbookCom {
         for ($i = 1; $i -le $worksheets.Count; $i++) {
             $sheet = $worksheets.Item($i)
             $sheetNames.Add([string]$sheet.Name)
-            [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($sheet)
+            $null = [System.Runtime.InteropServices.Marshal]::ReleaseComObject($sheet)
         }
         if ([string]::IsNullOrWhiteSpace($SheetName) -or -not $sheetNames.Contains($SheetName)) { $SheetName = $sheetNames[0] }
 
@@ -930,9 +930,9 @@ function Read-TbmWorkbookCom {
     finally {
         if ($null -ne $workbook) { try { $workbook.Close($false) } catch { Write-TbmLog -Level Debug -Source 'Recipients' -Message 'Workbook close failed.' } }
         if ($null -ne $excel) { try { $excel.Quit() } catch { Write-TbmLog -Level Debug -Source 'Recipients' -Message 'Excel quit failed.' } }
-        foreach ($comObject in $comObjects) { [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($comObject) }
+        foreach ($comObject in $comObjects) { $null = [System.Runtime.InteropServices.Marshal]::ReleaseComObject($comObject) }
         foreach ($comObject in @($usedRange, $worksheet, $worksheets, $workbook, $workbooks, $excel)) {
-            if ($null -ne $comObject) { [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($comObject) }
+            if ($null -ne $comObject) { $null = [System.Runtime.InteropServices.Marshal]::ReleaseComObject($comObject) }
         }
         [System.GC]::Collect()
         [System.GC]::WaitForPendingFinalizers()

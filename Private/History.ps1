@@ -131,7 +131,7 @@ function Set-TbmRecipientFromData {
     $Recipient.Error = [string](Get-TbmPropertyValue -InputObject $Data -Name 'Error')
     $Recipient.RenderedMessage = [string](Get-TbmPropertyValue -InputObject $Data -Name 'RenderedMessage')
     $status = [TeamsBlastMessenger.TbmRecipientStatus]::Pending
-    [void][System.Enum]::TryParse([string](Get-TbmPropertyValue -InputObject $Data -Name 'Status'), $true, [ref]$status)
+    $null = [System.Enum]::TryParse([string](Get-TbmPropertyValue -InputObject $Data -Name 'Status'), $true, [ref]$status)
     $Recipient.Status = $status
 }
 
