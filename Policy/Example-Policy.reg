@@ -1,0 +1,19 @@
+Windows Registry Editor Version 5.00
+
+; Example organization policy for Teams Blast Messenger.
+; Edit the values, then deploy with Group Policy Preferences, Intune, or: reg import Example-Policy.reg (as administrator).
+; "Enforced" values are locked for users; "Defaults" are starting values users can still change.
+; Use HKEY_CURRENT_USER\SOFTWARE\Policies\TeamsBlastMessenger for user-targeted policy (HKLM wins if both are set).
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\TeamsBlastMessenger\Enforced]
+; Your app registration (replace with your own IDs).
+"AuthMode"="GraphRest"
+"ClientId"="00000000-0000-0000-0000-000000000000"
+"TenantId"="contoso.onmicrosoft.com"
+; Always send through Microsoft Graph.
+"Transport"="Graph"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\TeamsBlastMessenger\Defaults]
+; 2 seconds between messages (0x7d0 = 2000 ms) and 90 days of logs (0x5a).
+"PacingDelayMs"=dword:000007d0
+"LogRetentionDays"=dword:0000005a

@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<policyDefinitionResources xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" revision="1.0" schemaVersion="1.0" xmlns="http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions">
+  <displayName>Teams Blast Messenger</displayName>
+  <description>Organization defaults and enforced settings for Teams Blast Messenger.</description>
+  <resources>
+    <stringTable>
+      <string id="TBM">Teams Blast Messenger</string>
+      <string id="TBM_Defaults">Defaults (users can change)</string>
+      <string id="TBM_Enforced">Enforced (locked)</string>
+      <string id="SUPPORTED_TBM">Teams Blast Messenger 1.0 and later</string>
+      <string id="AuthMode_Auto">Auto</string>
+      <string id="AuthMode_GraphSdk">Microsoft Graph PowerShell SDK</string>
+      <string id="AuthMode_GraphRest">App registration (device code)</string>
+      <string id="AuthMode">Sign-in method</string>
+      <string id="AuthMode_Defaults_Help">Sets the organization default. Users can still change it in Settings; their own choice applies only to them. How users sign in to Microsoft Graph. Auto uses the app registration when a Client ID is set, otherwise the Microsoft Graph PowerShell SDK. Machine (HKLM) policy takes precedence over user (HKCU) policy.</string>
+      <string id="AuthMode_Enforced_Help">Locks this setting for users; it cannot be changed in the app. Takes precedence over the user's own choice and over the default. How users sign in to Microsoft Graph. Auto uses the app registration when a Client ID is set, otherwise the Microsoft Graph PowerShell SDK. Machine (HKLM) policy takes precedence over user (HKCU) policy.</string>
+      <string id="ClientId">Client (application) ID</string>
+      <string id="ClientId_Defaults_Help">Sets the organization default. Users can still change it in Settings; their own choice applies only to them. Application (client) ID of the Entra app registration used for sign-in (public client, delegated permissions User.Read, User.ReadBasic.All, Chat.Create, ChatMessage.Send, Chat.Read). Must be a GUID. Machine (HKLM) policy takes precedence over user (HKCU) policy.</string>
+      <string id="ClientId_Enforced_Help">Locks this setting for users; it cannot be changed in the app. Takes precedence over the user's own choice and over the default. Application (client) ID of the Entra app registration used for sign-in (public client, delegated permissions User.Read, User.ReadBasic.All, Chat.Create, ChatMessage.Send, Chat.Read). Must be a GUID. Machine (HKLM) policy takes precedence over user (HKCU) policy.</string>
+      <string id="TenantId">Tenant ID or domain</string>
+      <string id="TenantId_Defaults_Help">Sets the organization default. Users can still change it in Settings; their own choice applies only to them. Directory (tenant) ID or verified domain, for example contoso.onmicrosoft.com. Leave blank for "organizations". Machine (HKLM) policy takes precedence over user (HKCU) policy.</string>
+      <string id="TenantId_Enforced_Help">Locks this setting for users; it cannot be changed in the app. Takes precedence over the user's own choice and over the default. Directory (tenant) ID or verified domain, for example contoso.onmicrosoft.com. Leave blank for "organizations". Machine (HKLM) policy takes precedence over user (HKCU) policy.</string>
+      <string id="Transport_Auto">Auto (Graph if connected, else deep link)</string>
+      <string id="Transport_Graph">Microsoft Graph</string>
+      <string id="Transport_DeepLinkManual">Deep link - user presses Send</string>
+      <string id="Transport_DeepLinkAuto">Deep link - auto press Enter</string>
+      <string id="Transport">Send via</string>
+      <string id="Transport_Defaults_Help">Sets the organization default. Users can still change it in Settings; their own choice applies only to them. Which delivery method is selected. Graph sends through Microsoft Graph; the deep-link options open Teams with the message pre-filled. Machine (HKLM) policy takes precedence over user (HKCU) policy.</string>
+      <string id="Transport_Enforced_Help">Locks this setting for users; it cannot be changed in the app. Takes precedence over the user's own choice and over the default. Which delivery method is selected. Graph sends through Microsoft Graph; the deep-link options open Teams with the message pre-filled. Machine (HKLM) policy takes precedence over user (HKCU) policy.</string>
+      <string id="MessageFormat_Text">Plain text</string>
+      <string id="MessageFormat_Html">HTML</string>
+      <string id="MessageFormat">Message format</string>
+      <string id="MessageFormat_Defaults_Help">Sets the organization default. Users can still change it in Settings; their own choice applies only to them. Format of the message editor. Machine (HKLM) policy takes precedence over user (HKCU) policy.</string>
+      <string id="MessageFormat_Enforced_Help">Locks this setting for users; it cannot be changed in the app. Takes precedence over the user's own choice and over the default. Format of the message editor. Machine (HKLM) policy takes precedence over user (HKCU) policy.</string>
+      <string id="DeepLinkTarget_Desktop">Teams desktop app</string>
+      <string id="DeepLinkTarget_Web">Browser (Teams web)</string>
+      <string id="DeepLinkTarget">Deep links open in</string>
+      <string id="DeepLinkTarget_Defaults_Help">Sets the organization default. Users can still change it in Settings; their own choice applies only to them. Whether deep links open the Teams desktop app or Teams on the web. Machine (HKLM) policy takes precedence over user (HKCU) policy.</string>
+      <string id="DeepLinkTarget_Enforced_Help">Locks this setting for users; it cannot be changed in the app. Takes precedence over the user's own choice and over the default. Whether deep links open the Teams desktop app or Teams on the web. Machine (HKLM) policy takes precedence over user (HKCU) policy.</string>
+      <string id="DeepLinkSendDelaySeconds">Auto-send wait (seconds)</string>
+      <string id="DeepLinkSendDelaySeconds_Defaults_Help">Sets the organization default. Users can still change it in Settings; their own choice applies only to them. Seconds to wait for Teams to open a chat before Enter is pressed in deep-link auto mode. Range 1-120; built-in default 6. Machine (HKLM) policy takes precedence over user (HKCU) policy.</string>
+      <string id="DeepLinkSendDelaySeconds_Enforced_Help">Locks this setting for users; it cannot be changed in the app. Takes precedence over the user's own choice and over the default. Seconds to wait for Teams to open a chat before Enter is pressed in deep-link auto mode. Range 1-120; built-in default 6. Machine (HKLM) policy takes precedence over user (HKCU) policy.</string>
+      <string id="DeepLinkMaxUrlLength">Maximum deep-link length</string>
+      <string id="DeepLinkMaxUrlLength_Defaults_Help">Sets the organization default. Users can still change it in Settings; their own choice applies only to them. Deep links longer than this many characters trigger a warning before sending. Range 500-32000; built-in default 2000. Machine (HKLM) policy takes precedence over user (HKCU) policy.</string>
+      <string id="DeepLinkMaxUrlLength_Enforced_Help">Locks this setting for users; it cannot be changed in the app. Takes precedence over the user's own choice and over the default. Deep links longer than this many characters trigger a warning before sending. Range 500-32000; built-in default 2000. Machine (HKLM) policy takes precedence over user (HKCU) policy.</string>
+      <string id="PacingDelayMs">Delay between messages (ms)</string>
+      <string id="PacingDelayMs_Defaults_Help">Sets the organization default. Users can still change it in Settings; their own choice applies only to them. Milliseconds to wait between messages to stay within Microsoft Graph throttling limits. Range 0-60000; built-in default 1000. Machine (HKLM) policy takes precedence over user (HKCU) policy.</string>
+      <string id="PacingDelayMs_Enforced_Help">Locks this setting for users; it cannot be changed in the app. Takes precedence over the user's own choice and over the default. Milliseconds to wait between messages to stay within Microsoft Graph throttling limits. Range 0-60000; built-in default 1000. Machine (HKLM) policy takes precedence over user (HKCU) policy.</string>
+      <string id="TestRecipient">Test recipient</string>
+      <string id="TestRecipient_Defaults_Help">Sets the organization default. Users can still change it in Settings; their own choice applies only to them. Email address that receives Test sends. Leave blank to send tests to the signed-in user. Machine (HKLM) policy takes precedence over user (HKCU) policy.</string>
+      <string id="TestRecipient_Enforced_Help">Locks this setting for users; it cannot be changed in the app. Takes precedence over the user's own choice and over the default. Email address that receives Test sends. Leave blank to send tests to the signed-in user. Machine (HKLM) policy takes precedence over user (HKCU) policy.</string>
+      <string id="LogLevel_Debug">Debug</string>
+      <string id="LogLevel_Info">Info</string>
+      <string id="LogLevel_Warn">Warn</string>
+      <string id="LogLevel_Error">Error</string>
+      <string id="LogLevel">Log level</string>
+      <string id="LogLevel_Defaults_Help">Sets the organization default. Users can still change it in Settings; their own choice applies only to them. Minimum level written to the log file. Machine (HKLM) policy takes precedence over user (HKCU) policy.</string>
+      <string id="LogLevel_Enforced_Help">Locks this setting for users; it cannot be changed in the app. Takes precedence over the user's own choice and over the default. Minimum level written to the log file. Machine (HKLM) policy takes precedence over user (HKCU) policy.</string>
+      <string id="LogRetentionDays">Keep logs (days)</string>
+      <string id="LogRetentionDays_Defaults_Help">Sets the organization default. Users can still change it in Settings; their own choice applies only to them. Log files older than this many days are deleted at startup. Range 1-3650; built-in default 30. Machine (HKLM) policy takes precedence over user (HKCU) policy.</string>
+      <string id="LogRetentionDays_Enforced_Help">Locks this setting for users; it cannot be changed in the app. Takes precedence over the user's own choice and over the default. Log files older than this many days are deleted at startup. Range 1-3650; built-in default 30. Machine (HKLM) policy takes precedence over user (HKCU) policy.</string>
+      <string id="InteractionMaxChatPages">Chat pages to search</string>
+      <string id="InteractionMaxChatPages_Defaults_Help">Sets the organization default. Users can still change it in Settings; their own choice applies only to them. Pages of chats (50 per page, most recent first) searched to find chats for deep-link blasts when checking replies. Range 1-400; built-in default 40. Machine (HKLM) policy takes precedence over user (HKCU) policy.</string>
+      <string id="InteractionMaxChatPages_Enforced_Help">Locks this setting for users; it cannot be changed in the app. Takes precedence over the user's own choice and over the default. Pages of chats (50 per page, most recent first) searched to find chats for deep-link blasts when checking replies. Range 1-400; built-in default 40. Machine (HKLM) policy takes precedence over user (HKCU) policy.</string>
+    </stringTable>
+    <presentationTable>
+      <presentation id="AuthMode"><dropdownList refId="AuthMode" noSort="true" defaultItem="0">Sign-in method</dropdownList></presentation>
+      <presentation id="ClientId"><textBox refId="ClientId"><label>Client (application) ID</label></textBox></presentation>
+      <presentation id="TenantId"><textBox refId="TenantId"><label>Tenant ID or domain</label></textBox></presentation>
+      <presentation id="Transport"><dropdownList refId="Transport" noSort="true" defaultItem="0">Send via</dropdownList></presentation>
+      <presentation id="MessageFormat"><dropdownList refId="MessageFormat" noSort="true" defaultItem="0">Message format</dropdownList></presentation>
+      <presentation id="DeepLinkTarget"><dropdownList refId="DeepLinkTarget" noSort="true" defaultItem="0">Deep links open in</dropdownList></presentation>
+      <presentation id="DeepLinkSendDelaySeconds"><decimalTextBox refId="DeepLinkSendDelaySeconds" defaultValue="6">Auto-send wait (seconds)</decimalTextBox></presentation>
+      <presentation id="DeepLinkMaxUrlLength"><decimalTextBox refId="DeepLinkMaxUrlLength" defaultValue="2000">Maximum deep-link length</decimalTextBox></presentation>
+      <presentation id="PacingDelayMs"><decimalTextBox refId="PacingDelayMs" defaultValue="1000">Delay between messages (ms)</decimalTextBox></presentation>
+      <presentation id="TestRecipient"><textBox refId="TestRecipient"><label>Test recipient</label></textBox></presentation>
+      <presentation id="LogLevel"><dropdownList refId="LogLevel" noSort="true" defaultItem="0">Log level</dropdownList></presentation>
+      <presentation id="LogRetentionDays"><decimalTextBox refId="LogRetentionDays" defaultValue="30">Keep logs (days)</decimalTextBox></presentation>
+      <presentation id="InteractionMaxChatPages"><decimalTextBox refId="InteractionMaxChatPages" defaultValue="40">Chat pages to search</decimalTextBox></presentation>
+    </presentationTable>
+  </resources>
+</policyDefinitionResources>

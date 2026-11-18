@@ -176,12 +176,66 @@ Everything lives in `%APPDATA%\TeamsBlastMessenger`:
 |---|---|
 | `Logs\TBM_yyyyMMdd.log` | UTC timestamps, thread IDs, every Graph call (method, path, status, duration), each recipient outcome and full exception details. Tokens and message bodies are never logged |
 | `History\*.json` | One file per blast (plus a `.journal` while sending) |
-| `settings.json` | Settings |
+| `settings.json` | Your personal setting changes (only values that differ from the defaults; see *Deploying to a group*) |
 | `Cache\token.bin` | DPAPI-encrypted refresh token (app registration mode) |
 | `Cache\draft.json` | Your last message draft |
 | `Exports\` | Default folder for CSV exports |
 
 Use **Logs** in the top bar, or **Open data folder** in Settings, to open these folders. Log retention (30 days by default) and log level are set in Settings.
+
+## Deploying to a group (organization policy)
+
+Settings normally belong to each user (`%APPDATA%\TeamsBlastMessenger\settings.json`). To configure everyone at once, for example to set your app registration or require Graph, use registry policy. It's the standard Group Policy / Intune mechanism, and users can't change it.
+
+| Registry key | Effect |
+|---|---|
+| `HKLM\SOFTWARE\Policies\TeamsBlastMessenger\Defaults` | Organization **defaults**. Users start with these and can still change them |
+| `HKLM\SOFTWARE\Policies\TeamsBlastMessenger\Enforced` | **Locked** values. They override the user's choice, and the field is greyed out with "Set by your organization" |
+| `HKCU\SOFTWARE\Policies\TeamsBlastMessenger\…` | Same as above, but for user-targeted policy. HKLM wins when both are set |
+
+**Precedence**, lowest to highest:
+
+1. built-in defaults
+2. HKCU Defaults
+3. HKLM Defaults
+4. the user's own settings
+5. HKCU Enforced
+6. HKLM Enforced
+
+**What gets saved per user.** The app stores only what the user personally changed. If you change an organization default later, it reaches everyone who hasn't overridden that setting.
+
+**Value names** match the setting names.
+
+| Value | Type | Allowed |
+|---|---|---|
+| `AuthMode` | string | `Auto`, `GraphSdk`, `GraphRest` |
+| `ClientId` | string | app registration GUID |
+| `TenantId` | string | tenant GUID or domain |
+| `Transport` | string | `Auto`, `Graph`, `DeepLinkManual`, `DeepLinkAuto` |
+| `MessageFormat` | string | `Text`, `Html` |
+| `DeepLinkTarget` | string | `Desktop`, `Web` |
+| `TestRecipient` | string | email address |
+| `LogLevel` | string | `Debug`, `Info`, `Warn`, `Error` |
+| `PacingDelayMs` | DWORD | 0–60000 |
+| `DeepLinkSendDelaySeconds` | DWORD | 1–120 |
+| `DeepLinkMaxUrlLength` | DWORD | 500–32000 |
+| `LogRetentionDays` | DWORD | 1–3650 |
+| `InteractionMaxChatPages` | DWORD | 1–400 |
+
+Invalid or unknown values are ignored and logged, so a typo never stops the app.
+
+**Ways to deploy** (all in `Policy\`):
+
+* **Group Policy.** Copy `TeamsBlastMessenger.admx` and `en-US\TeamsBlastMessenger.adml` to `%SystemRoot%\PolicyDefinitions` or your Central Store. Then set the policies under *Administrative Templates → Teams Blast Messenger → Defaults / Enforced*. They appear under both Computer and User Configuration.
+* **Intune.** Under *Devices → Configuration → Create → Templates → Imported Administrative templates*, import the same ADMX/ADML, then configure the settings.
+* **Script or package.** Edit `Example-Policy.reg`, which enforces an app registration and Graph-only sending and sets two defaults. Deploy it with `reg import Example-Policy.reg` (as administrator), Group Policy Preferences, or your software deployment tool.
+
+**Checking what applies:**
+
+* The log lists every applied policy value and the key it came from (`[Policy]` lines at startup).
+* **Settings** shows a banner when policy is in effect, and locked fields explain themselves on hover.
+* If **Send via** or **Format** is enforced, those boxes are locked on the main window too.
+* Removing the policy values gives control back to users. Policy is read each time the app starts.
 
 ## Limits and notes
 
@@ -210,6 +264,7 @@ Private\SendEngine.ps1          background runspaces and the send worker
 Private\History.ps1             history store, journal, CSV export
 Private\Interactions.ps1        reply discovery and statistics
 Private\Ui*.ps1, Public\        WPF windows (XAML in Xaml\)
+Policy\                         Group Policy ADMX/ADML templates and an example .reg
 Tests\                          Pester tests for the non-UI logic
 ```
 

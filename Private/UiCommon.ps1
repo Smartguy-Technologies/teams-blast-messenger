@@ -284,10 +284,49 @@ function Wait-TbmBackgroundJob {
 
 #region Settings dialog
 
+# Setting name -> Settings window control.
+$script:TbmSettingsControlMap = [ordered]@{
+    AuthMode                 = 'CmbAuthMode'
+    ClientId                 = 'TxtClientId'
+    TenantId                 = 'TxtTenantId'
+    PacingDelayMs            = 'TxtPacing'
+    TestRecipient            = 'TxtTestRecipient'
+    DeepLinkTarget           = 'CmbDeepLinkTarget'
+    DeepLinkSendDelaySeconds = 'TxtDeepLinkDelay'
+    DeepLinkMaxUrlLength     = 'TxtMaxUrl'
+    LogLevel                 = 'CmbLogLevel'
+    LogRetentionDays         = 'TxtRetention'
+    InteractionMaxChatPages  = 'TxtChatPages'
+}
+
+function Set-TbmPolicyLock {
+    <#
+    .SYNOPSIS
+        Disables a control whose setting is enforced by policy and explains why on hover.
+    #>
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNull()]
+        [System.Windows.FrameworkElement]$Control,
+
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$SettingName
+    )
+
+    if (-not (Test-TbmSettingEnforced -Name $SettingName)) { return $false }
+    $Control.IsEnabled = $false
+    $Control.ToolTip = 'Set by your organization ({0}).' -f (Get-TbmPolicySource -Name $SettingName)
+    [System.Windows.Controls.ToolTipService]::SetShowOnDisabled($Control, $true)
+    return $true
+}
+
 function Show-TbmSettingsWindow {
     <#
     .SYNOPSIS
-        Edits settings in place. Returns $true when saved.
+        Edits settings in place. Settings enforced by organization policy are shown but locked. Returns $true when saved.
     #>
     [CmdletBinding()]
     [OutputType([bool])]
@@ -305,17 +344,22 @@ function Show-TbmSettingsWindow {
     $settingsView = @{ Ui = $ui; Settings = $Settings; Saved = $false }
     $c = $ui.Controls
 
-    Set-TbmComboByTag -ComboBox $c.CmbAuthMode -Value ([string]$Settings.AuthMode)
-    $c.TxtClientId.Text = [string]$Settings.ClientId
-    $c.TxtTenantId.Text = [string]$Settings.TenantId
-    $c.TxtPacing.Text = [string]$Settings.PacingDelayMs
-    $c.TxtTestRecipient.Text = [string]$Settings.TestRecipient
-    Set-TbmComboByTag -ComboBox $c.CmbDeepLinkTarget -Value ([string]$Settings.DeepLinkTarget)
-    $c.TxtDeepLinkDelay.Text = [string]$Settings.DeepLinkSendDelaySeconds
-    $c.TxtMaxUrl.Text = [string]$Settings.DeepLinkMaxUrlLength
-    Set-TbmComboByTag -ComboBox $c.CmbLogLevel -Value ([string]$Settings.LogLevel)
-    $c.TxtRetention.Text = [string]$Settings.LogRetentionDays
-    $c.TxtChatPages.Text = [string]$Settings.InteractionMaxChatPages
+    $locked = 0
+    foreach ($name in $script:TbmSettingsControlMap.Keys) {
+        $control = $c[$script:TbmSettingsControlMap[$name]]
+        if ($control -is [System.Windows.Controls.ComboBox]) { Set-TbmComboByTag -ComboBox $control -Value ([string]$Settings[$name]) }
+        else { $control.Text = [string]$Settings[$name] }
+        if (Set-TbmPolicyLock -Control $control -SettingName $name) { $locked++ }
+    }
+
+    $policy = Get-TbmPolicyState
+    if ($locked -gt 0 -or $policy.Defaults.Count -gt 0) {
+        $notes = [System.Collections.Generic.List[string]]::new()
+        if ($locked -gt 0) { $notes.Add(('{0} setting(s) are set by your organization and are locked (hover for details).' -f $locked)) }
+        if ($policy.Defaults.Count -gt 0) { $notes.Add('Your organization also provides default values; anything you change here applies to you only.') }
+        $c.TxtPolicy.Text = [string]::Join(' ', $notes)
+        $c.BdrPolicy.Visibility = [System.Windows.Visibility]::Visible
+    }
 
     $sdkText = 'Graph SDK module: not installed (Install-Module Microsoft.Graph.Authentication -Scope CurrentUser).'
     $sdkModules = Get-Module -ListAvailable -Name 'Microsoft.Graph.Authentication'
@@ -329,38 +373,21 @@ function Show-TbmSettingsWindow {
                 $controls = $settingsView.Ui.Controls
                 $errors = [System.Collections.Generic.List[string]]::new()
                 $values = @{}
-                foreach ($spec in @(
-                        @{ Name = 'PacingDelayMs'; Box = 'TxtPacing'; Min = 0; Max = 60000; Label = 'Delay between messages' },
-                        @{ Name = 'DeepLinkSendDelaySeconds'; Box = 'TxtDeepLinkDelay'; Min = 1; Max = 120; Label = 'Auto-send wait' },
-                        @{ Name = 'DeepLinkMaxUrlLength'; Box = 'TxtMaxUrl'; Min = 500; Max = 32000; Label = 'Max deep-link length' },
-                        @{ Name = 'LogRetentionDays'; Box = 'TxtRetention'; Min = 1; Max = 3650; Label = 'Keep logs' },
-                        @{ Name = 'InteractionMaxChatPages'; Box = 'TxtChatPages'; Min = 1; Max = 400; Label = 'Chat pages to search' })) {
-                    $number = 0
-                    if (-not [int]::TryParse($controls[$spec.Box].Text.Trim(), [ref]$number) -or $number -lt $spec.Min -or $number -gt $spec.Max) {
-                        $errors.Add(('{0} must be a whole number from {1} to {2}.' -f $spec.Label, $spec.Min, $spec.Max))
-                    }
-                    else { $values[$spec.Name] = $number }
+                foreach ($name in $script:TbmSettingsControlMap.Keys) {
+                    if (Test-TbmSettingEnforced -Name $name) { continue }
+                    $control = $controls[$script:TbmSettingsControlMap[$name]]
+                    $raw = $null
+                    if ($control -is [System.Windows.Controls.ComboBox]) { $raw = Get-TbmComboTag -ComboBox $control } else { $raw = $control.Text }
+                    $check = Test-TbmSettingValue -Name $name -Value $raw
+                    if ($check.Valid) { $values[$name] = $check.Value } else { $errors.Add($check.Error) }
                 }
-                $clientId = $controls.TxtClientId.Text.Trim()
-                $parsedGuid = [guid]::Empty
-                if (-not [string]::IsNullOrEmpty($clientId) -and -not [guid]::TryParse($clientId, [ref]$parsedGuid)) { $errors.Add('Client ID must be a GUID (Application ID from the app registration).') }
-                $testRecipient = $controls.TxtTestRecipient.Text.Trim()
-                if (-not [string]::IsNullOrEmpty($testRecipient) -and -not (Test-TbmEmailAddress -Value $testRecipient)) { $errors.Add('Test recipient must be an email address.') }
                 if ($errors.Count -gt 0) {
                     [void](Show-TbmMessageBox -Text ([string]::Join("`n", $errors)) -Icon ([System.Windows.MessageBoxImage]::Warning) -Owner $settingsView.Ui.Window)
                     return
                 }
 
                 $target = $settingsView.Settings
-                foreach ($key in $values.Keys) { $target[$key] = $values[$key] }
-                $target.AuthMode = Get-TbmComboTag -ComboBox $controls.CmbAuthMode
-                $target.ClientId = $clientId
-                $tenant = $controls.TxtTenantId.Text.Trim()
-                if ([string]::IsNullOrEmpty($tenant)) { $tenant = 'organizations' }
-                $target.TenantId = $tenant
-                $target.TestRecipient = $testRecipient
-                $target.DeepLinkTarget = Get-TbmComboTag -ComboBox $controls.CmbDeepLinkTarget
-                $target.LogLevel = Get-TbmComboTag -ComboBox $controls.CmbLogLevel
+                foreach ($name in $values.Keys) { $target[$name] = $values[$name] }
                 Save-TbmSettings -Settings $target
 
                 $level = [TeamsBlastMessenger.TbmLogLevel]::Info

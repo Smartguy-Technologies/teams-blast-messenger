@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Group Policy template for Teams Blast Messenger. Copy to %SystemRoot%\PolicyDefinitions (or the Central Store) with en-US\TeamsBlastMessenger.adml. -->
+<policyDefinitions xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" revision="1.0" schemaVersion="1.0" xmlns="http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions">
+  <policyNamespaces>
+    <target prefix="tbm" namespace="SmartguyTechnologies.Policies.TeamsBlastMessenger"/>
+  </policyNamespaces>
+  <resources minRequiredRevision="1.0"/>
+  <supportedOn>
+    <definitions>
+      <definition name="SUPPORTED_TBM" displayName="$(string.SUPPORTED_TBM)"/>
+    </definitions>
+  </supportedOn>
+  <categories>
+    <category name="TBM" displayName="$(string.TBM)"/>
+    <category name="TBM_Defaults" displayName="$(string.TBM_Defaults)"><parentCategory ref="TBM"/></category>
+    <category name="TBM_Enforced" displayName="$(string.TBM_Enforced)"><parentCategory ref="TBM"/></category>
+  </categories>
+  <policies>
+    <policy name="Defaults_AuthMode" class="Both" displayName="$(string.AuthMode)" explainText="$(string.AuthMode_Defaults_Help)" presentation="$(presentation.AuthMode)" key="SOFTWARE\Policies\TeamsBlastMessenger\Defaults">
+      <parentCategory ref="TBM_Defaults"/>
+      <supportedOn ref="SUPPORTED_TBM"/>
+      <elements><enum id="AuthMode" valueName="AuthMode" required="true"><item displayName="$(string.AuthMode_Auto)"><value><string>Auto</string></value></item><item displayName="$(string.AuthMode_GraphSdk)"><value><string>GraphSdk</string></value></item><item displayName="$(string.AuthMode_GraphRest)"><value><string>GraphRest</string></value></item></enum></elements>
+    </policy>
+    <policy name="Enforced_AuthMode" class="Both" displayName="$(string.AuthMode)" explainText="$(string.AuthMode_Enforced_Help)" presentation="$(presentation.AuthMode)" key="SOFTWARE\Policies\TeamsBlastMessenger\Enforced">
+      <parentCategory ref="TBM_Enforced"/>
+      <supportedOn ref="SUPPORTED_TBM"/>
+      <elements><enum id="AuthMode" valueName="AuthMode" required="true"><item displayName="$(string.AuthMode_Auto)"><value><string>Auto</string></value></item><item displayName="$(string.AuthMode_GraphSdk)"><value><string>GraphSdk</string></value></item><item displayName="$(string.AuthMode_GraphRest)"><value><string>GraphRest</string></value></item></enum></elements>
+    </policy>
+    <policy name="Defaults_ClientId" class="Both" displayName="$(string.ClientId)" explainText="$(string.ClientId_Defaults_Help)" presentation="$(presentation.ClientId)" key="SOFTWARE\Policies\TeamsBlastMessenger\Defaults">
+      <parentCategory ref="TBM_Defaults"/>
+      <supportedOn ref="SUPPORTED_TBM"/>
+      <elements><text id="ClientId" valueName="ClientId" maxLength="256"/></elements>
+    </policy>
+    <policy name="Enforced_ClientId" class="Both" displayName="$(string.ClientId)" explainText="$(string.ClientId_Enforced_Help)" presentation="$(presentation.ClientId)" key="SOFTWARE\Policies\TeamsBlastMessenger\Enforced">
+      <parentCategory ref="TBM_Enforced"/>
+      <supportedOn ref="SUPPORTED_TBM"/>
+      <elements><text id="ClientId" valueName="ClientId" maxLength="256"/></elements>
+    </policy>
+    <policy name="Defaults_TenantId" class="Both" displayName="$(string.TenantId)" explainText="$(string.TenantId_Defaults_Help)" presentation="$(presentation.TenantId)" key="SOFTWARE\Policies\TeamsBlastMessenger\Defaults">
+      <parentCategory ref="TBM_Defaults"/>
+      <supportedOn ref="SUPPORTED_TBM"/>
+      <elements><text id="TenantId" valueName="TenantId" maxLength="256"/></elements>
+    </policy>
+    <policy name="Enforced_TenantId" class="Both" displayName="$(string.TenantId)" explainText="$(string.TenantId_Enforced_Help)" presentation="$(presentation.TenantId)" key="SOFTWARE\Policies\TeamsBlastMessenger\Enforced">
+      <parentCategory ref="TBM_Enforced"/>
+      <supportedOn ref="SUPPORTED_TBM"/>
+      <elements><text id="TenantId" valueName="TenantId" maxLength="256"/></elements>
+    </policy>
+    <policy name="Defaults_Transport" class="Both" displayName="$(string.Transport)" explainText="$(string.Transport_Defaults_Help)" presentation="$(presentation.Transport)" key="SOFTWARE\Policies\TeamsBlastMessenger\Defaults">
+      <parentCategory ref="TBM_Defaults"/>
+      <supportedOn ref="SUPPORTED_TBM"/>
+      <elements><enum id="Transport" valueName="Transport" required="true"><item displayName="$(string.Transport_Auto)"><value><string>Auto</string></value></item><item displayName="$(string.Transport_Graph)"><value><string>Graph</string></value></item><item displayName="$(string.Transport_DeepLinkManual)"><value><string>DeepLinkManual</string></value></item><item displayName="$(string.Transport_DeepLinkAuto)"><value><string>DeepLinkAuto</string></value></item></enum></elements>
+    </policy>
+    <policy name="Enforced_Transport" class="Both" displayName="$(string.Transport)" explainText="$(string.Transport_Enforced_Help)" presentation="$(presentation.Transport)" key="SOFTWARE\Policies\TeamsBlastMessenger\Enforced">
+      <parentCategory ref="TBM_Enforced"/>
+      <supportedOn ref="SUPPORTED_TBM"/>
+      <elements><enum id="Transport" valueName="Transport" required="true"><item displayName="$(string.Transport_Auto)"><value><string>Auto</string></value></item><item displayName="$(string.Transport_Graph)"><value><string>Graph</string></value></item><item displayName="$(string.Transport_DeepLinkManual)"><value><string>DeepLinkManual</string></value></item><item displayName="$(string.Transport_DeepLinkAuto)"><value><string>DeepLinkAuto</string></value></item></enum></elements>
+    </policy>
+    <policy name="Defaults_MessageFormat" class="Both" displayName="$(string.MessageFormat)" explainText="$(string.MessageFormat_Defaults_Help)" presentation="$(presentation.MessageFormat)" key="SOFTWARE\Policies\TeamsBlastMessenger\Defaults">
+      <parentCategory ref="TBM_Defaults"/>
+      <supportedOn ref="SUPPORTED_TBM"/>
+      <elements><enum id="MessageFormat" valueName="MessageFormat" required="true"><item displayName="$(string.MessageFormat_Text)"><value><string>Text</string></value></item><item displayName="$(string.MessageFormat_Html)"><value><string>Html</string></value></item></enum></elements>
+    </policy>
+    <policy name="Enforced_MessageFormat" class="Both" displayName="$(string.MessageFormat)" explainText="$(string.MessageFormat_Enforced_Help)" presentation="$(presentation.MessageFormat)" key="SOFTWARE\Policies\TeamsBlastMessenger\Enforced">
+      <parentCategory ref="TBM_Enforced"/>
+      <supportedOn ref="SUPPORTED_TBM"/>
+      <elements><enum id="MessageFormat" valueName="MessageFormat" required="true"><item displayName="$(string.MessageFormat_Text)"><value><string>Text</string></value></item><item displayName="$(string.MessageFormat_Html)"><value><string>Html</string></value></item></enum></elements>
+    </policy>
+    <policy name="Defaults_DeepLinkTarget" class="Both" displayName="$(string.DeepLinkTarget)" explainText="$(string.DeepLinkTarget_Defaults_Help)" presentation="$(presentation.DeepLinkTarget)" key="SOFTWARE\Policies\TeamsBlastMessenger\Defaults">
+      <parentCategory ref="TBM_Defaults"/>
+      <supportedOn ref="SUPPORTED_TBM"/>
+      <elements><enum id="DeepLinkTarget" valueName="DeepLinkTarget" required="true"><item displayName="$(string.DeepLinkTarget_Desktop)"><value><string>Desktop</string></value></item><item displayName="$(string.DeepLinkTarget_Web)"><value><string>Web</string></value></item></enum></elements>
+    </policy>
+    <policy name="Enforced_DeepLinkTarget" class="Both" displayName="$(string.DeepLinkTarget)" explainText="$(string.DeepLinkTarget_Enforced_Help)" presentation="$(presentation.DeepLinkTarget)" key="SOFTWARE\Policies\TeamsBlastMessenger\Enforced">
+      <parentCategory ref="TBM_Enforced"/>
+      <supportedOn ref="SUPPORTED_TBM"/>
+      <elements><enum id="DeepLinkTarget" valueName="DeepLinkTarget" required="true"><item displayName="$(string.DeepLinkTarget_Desktop)"><value><string>Desktop</string></value></item><item displayName="$(string.DeepLinkTarget_Web)"><value><string>Web</string></value></item></enum></elements>
+    </policy>
+    <policy name="Defaults_DeepLinkSendDelaySeconds" class="Both" displayName="$(string.DeepLinkSendDelaySeconds)" explainText="$(string.DeepLinkSendDelaySeconds_Defaults_Help)" presentation="$(presentation.DeepLinkSendDelaySeconds)" key="SOFTWARE\Policies\TeamsBlastMessenger\Defaults">
+      <parentCategory ref="TBM_Defaults"/>
+      <supportedOn ref="SUPPORTED_TBM"/>
+      <elements><decimal id="DeepLinkSendDelaySeconds" valueName="DeepLinkSendDelaySeconds" minValue="1" maxValue="120" required="true"/></elements>
+    </policy>
+    <policy name="Enforced_DeepLinkSendDelaySeconds" class="Both" displayName="$(string.DeepLinkSendDelaySeconds)" explainText="$(string.DeepLinkSendDelaySeconds_Enforced_Help)" presentation="$(presentation.DeepLinkSendDelaySeconds)" key="SOFTWARE\Policies\TeamsBlastMessenger\Enforced">
+      <parentCategory ref="TBM_Enforced"/>
+      <supportedOn ref="SUPPORTED_TBM"/>
+      <elements><decimal id="DeepLinkSendDelaySeconds" valueName="DeepLinkSendDelaySeconds" minValue="1" maxValue="120" required="true"/></elements>
+    </policy>
+    <policy name="Defaults_DeepLinkMaxUrlLength" class="Both" displayName="$(string.DeepLinkMaxUrlLength)" explainText="$(string.DeepLinkMaxUrlLength_Defaults_Help)" presentation="$(presentation.DeepLinkMaxUrlLength)" key="SOFTWARE\Policies\TeamsBlastMessenger\Defaults">
+      <parentCategory ref="TBM_Defaults"/>
+      <supportedOn ref="SUPPORTED_TBM"/>
+      <elements><decimal id="DeepLinkMaxUrlLength" valueName="DeepLinkMaxUrlLength" minValue="500" maxValue="32000" required="true"/></elements>
+    </policy>
+    <policy name="Enforced_DeepLinkMaxUrlLength" class="Both" displayName="$(string.DeepLinkMaxUrlLength)" explainText="$(string.DeepLinkMaxUrlLength_Enforced_Help)" presentation="$(presentation.DeepLinkMaxUrlLength)" key="SOFTWARE\Policies\TeamsBlastMessenger\Enforced">
+      <parentCategory ref="TBM_Enforced"/>
+      <supportedOn ref="SUPPORTED_TBM"/>
+      <elements><decimal id="DeepLinkMaxUrlLength" valueName="DeepLinkMaxUrlLength" minValue="500" maxValue="32000" required="true"/></elements>
+    </policy>
+    <policy name="Defaults_PacingDelayMs" class="Both" displayName="$(string.PacingDelayMs)" explainText="$(string.PacingDelayMs_Defaults_Help)" presentation="$(presentation.PacingDelayMs)" key="SOFTWARE\Policies\TeamsBlastMessenger\Defaults">
+      <parentCategory ref="TBM_Defaults"/>
+      <supportedOn ref="SUPPORTED_TBM"/>
+      <elements><decimal id="PacingDelayMs" valueName="PacingDelayMs" minValue="0" maxValue="60000" required="true"/></elements>
+    </policy>
+    <policy name="Enforced_PacingDelayMs" class="Both" displayName="$(string.PacingDelayMs)" explainText="$(string.PacingDelayMs_Enforced_Help)" presentation="$(presentation.PacingDelayMs)" key="SOFTWARE\Policies\TeamsBlastMessenger\Enforced">
+      <parentCategory ref="TBM_Enforced"/>
+      <supportedOn ref="SUPPORTED_TBM"/>
+      <elements><decimal id="PacingDelayMs" valueName="PacingDelayMs" minValue="0" maxValue="60000" required="true"/></elements>
+    </policy>
+    <policy name="Defaults_TestRecipient" class="Both" displayName="$(string.TestRecipient)" explainText="$(string.TestRecipient_Defaults_Help)" presentation="$(presentation.TestRecipient)" key="SOFTWARE\Policies\TeamsBlastMessenger\Defaults">
+      <parentCategory ref="TBM_Defaults"/>
+      <supportedOn ref="SUPPORTED_TBM"/>
+      <elements><text id="TestRecipient" valueName="TestRecipient" maxLength="256"/></elements>
+    </policy>
+    <policy name="Enforced_TestRecipient" class="Both" displayName="$(string.TestRecipient)" explainText="$(string.TestRecipient_Enforced_Help)" presentation="$(presentation.TestRecipient)" key="SOFTWARE\Policies\TeamsBlastMessenger\Enforced">
+      <parentCategory ref="TBM_Enforced"/>
+      <supportedOn ref="SUPPORTED_TBM"/>
+      <elements><text id="TestRecipient" valueName="TestRecipient" maxLength="256"/></elements>
+    </policy>
+    <policy name="Defaults_LogLevel" class="Both" displayName="$(string.LogLevel)" explainText="$(string.LogLevel_Defaults_Help)" presentation="$(presentation.LogLevel)" key="SOFTWARE\Policies\TeamsBlastMessenger\Defaults">
+      <parentCategory ref="TBM_Defaults"/>
+      <supportedOn ref="SUPPORTED_TBM"/>
+      <elements><enum id="LogLevel" valueName="LogLevel" required="true"><item displayName="$(string.LogLevel_Debug)"><value><string>Debug</string></value></item><item displayName="$(string.LogLevel_Info)"><value><string>Info</string></value></item><item displayName="$(string.LogLevel_Warn)"><value><string>Warn</string></value></item><item displayName="$(string.LogLevel_Error)"><value><string>Error</string></value></item></enum></elements>
+    </policy>
+    <policy name="Enforced_LogLevel" class="Both" displayName="$(string.LogLevel)" explainText="$(string.LogLevel_Enforced_Help)" presentation="$(presentation.LogLevel)" key="SOFTWARE\Policies\TeamsBlastMessenger\Enforced">
+      <parentCategory ref="TBM_Enforced"/>
+      <supportedOn ref="SUPPORTED_TBM"/>
+      <elements><enum id="LogLevel" valueName="LogLevel" required="true"><item displayName="$(string.LogLevel_Debug)"><value><string>Debug</string></value></item><item displayName="$(string.LogLevel_Info)"><value><string>Info</string></value></item><item displayName="$(string.LogLevel_Warn)"><value><string>Warn</string></value></item><item displayName="$(string.LogLevel_Error)"><value><string>Error</string></value></item></enum></elements>
+    </policy>
+    <policy name="Defaults_LogRetentionDays" class="Both" displayName="$(string.LogRetentionDays)" explainText="$(string.LogRetentionDays_Defaults_Help)" presentation="$(presentation.LogRetentionDays)" key="SOFTWARE\Policies\TeamsBlastMessenger\Defaults">
+      <parentCategory ref="TBM_Defaults"/>
+      <supportedOn ref="SUPPORTED_TBM"/>
+      <elements><decimal id="LogRetentionDays" valueName="LogRetentionDays" minValue="1" maxValue="3650" required="true"/></elements>
+    </policy>
+    <policy name="Enforced_LogRetentionDays" class="Both" displayName="$(string.LogRetentionDays)" explainText="$(string.LogRetentionDays_Enforced_Help)" presentation="$(presentation.LogRetentionDays)" key="SOFTWARE\Policies\TeamsBlastMessenger\Enforced">
+      <parentCategory ref="TBM_Enforced"/>
+      <supportedOn ref="SUPPORTED_TBM"/>
+      <elements><decimal id="LogRetentionDays" valueName="LogRetentionDays" minValue="1" maxValue="3650" required="true"/></elements>
+    </policy>
+    <policy name="Defaults_InteractionMaxChatPages" class="Both" displayName="$(string.InteractionMaxChatPages)" explainText="$(string.InteractionMaxChatPages_Defaults_Help)" presentation="$(presentation.InteractionMaxChatPages)" key="SOFTWARE\Policies\TeamsBlastMessenger\Defaults">
+      <parentCategory ref="TBM_Defaults"/>
+      <supportedOn ref="SUPPORTED_TBM"/>
+      <elements><decimal id="InteractionMaxChatPages" valueName="InteractionMaxChatPages" minValue="1" maxValue="400" required="true"/></elements>
+    </policy>
+    <policy name="Enforced_InteractionMaxChatPages" class="Both" displayName="$(string.InteractionMaxChatPages)" explainText="$(string.InteractionMaxChatPages_Enforced_Help)" presentation="$(presentation.InteractionMaxChatPages)" key="SOFTWARE\Policies\TeamsBlastMessenger\Enforced">
+      <parentCategory ref="TBM_Enforced"/>
+      <supportedOn ref="SUPPORTED_TBM"/>
+      <elements><decimal id="InteractionMaxChatPages" valueName="InteractionMaxChatPages" minValue="1" maxValue="400" required="true"/></elements>
+    </policy>
+  </policies>
+</policyDefinitions>

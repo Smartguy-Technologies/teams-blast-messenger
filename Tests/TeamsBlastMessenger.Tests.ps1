@@ -218,6 +218,139 @@ Describe 'Manually entered recipients' {
     }
 }
 
+Describe 'Settings and organization policy' {
+    AfterEach {
+        InModuleScope TeamsBlastMessenger {
+            $script:TbmPolicy = $null
+            $path = Get-TbmAppDataPath -Name 'Settings'
+            if ([System.IO.File]::Exists($path)) { [System.IO.File]::Delete($path) }
+        }
+    }
+
+    It 'validates and normalises setting values' {
+        InModuleScope TeamsBlastMessenger {
+            (Test-TbmSettingValue -Name 'Transport' -Value 'graph').Value | Should -Be 'Graph'
+            (Test-TbmSettingValue -Name 'Transport' -Value 'Teams').Valid | Should -BeFalse
+            (Test-TbmSettingValue -Name 'PacingDelayMs' -Value ([int]2000)).Value | Should -Be 2000
+            (Test-TbmSettingValue -Name 'PacingDelayMs' -Value ' 250 ').Value | Should -Be 250
+            (Test-TbmSettingValue -Name 'PacingDelayMs' -Value 60001).Error | Should -Match 'from 0 to 60000'
+            (Test-TbmSettingValue -Name 'PacingDelayMs' -Value '1.5').Valid | Should -BeFalse
+            (Test-TbmSettingValue -Name 'ClientId' -Value 'not-a-guid').Valid | Should -BeFalse
+            (Test-TbmSettingValue -Name 'ClientId' -Value '').Valid | Should -BeTrue
+            (Test-TbmSettingValue -Name 'TenantId' -Value '').Value | Should -Be 'organizations'
+            (Test-TbmSettingValue -Name 'TenantId' -Value 'contoso.com/x').Valid | Should -BeFalse
+            (Test-TbmSettingValue -Name 'TestRecipient' -Value 'nope').Valid | Should -BeFalse
+            (Test-TbmSettingValue -Name 'Bogus' -Value 1).Valid | Should -BeFalse
+        }
+    }
+
+    It 'applies built-in < HKCU Defaults < HKLM Defaults < user < HKCU Enforced < HKLM Enforced, ignoring bad values' {
+        InModuleScope TeamsBlastMessenger {
+            Mock Read-TbmRegistryPolicy {
+                switch ('{0}/{1}' -f $Hive, $Section) {
+                    'CurrentUser/Defaults' { return @{ PacingDelayMs = 100; LogLevel = 'Warn'; DeepLinkTarget = 'Web' } }
+                    'LocalMachine/Defaults' { return @{ PacingDelayMs = [int]200; clientid = '11111111-2222-3333-4444-555555555555' } }
+                    'CurrentUser/Enforced' { return @{ Transport = 'Graph'; MessageFormat = 'Html' } }
+                    'LocalMachine/Enforced' { return @{ Transport = 'DeepLinkManual'; LogRetentionDays = 0; Bogus = 'x'; LastFolder = 'C:\x' } }
+                }
+                return $null
+            }
+            Write-TbmTextFileAtomic -Path (Get-TbmAppDataPath -Name 'Settings') -Content '{ "PacingDelayMs": 300, "Transport": "Auto", "DeepLinkTarget": "Desktop", "LogLevel": "nonsense" }'
+
+            $settings = Get-TbmSettings
+            $settings.PacingDelayMs | Should -Be 300                 # user beats both Defaults
+            $settings.DeepLinkTarget | Should -Be 'Desktop'          # user beats HKCU Defaults
+            $settings.LogLevel | Should -Be 'Warn'                   # invalid user value ignored -> HKCU Default
+            $settings.ClientId | Should -Be '11111111-2222-3333-4444-555555555555'   # case-insensitive value name
+            $settings.Transport | Should -Be 'DeepLinkManual'        # HKLM Enforced beats HKCU Enforced and user
+            $settings.MessageFormat | Should -Be 'Html'              # HKCU Enforced
+            $settings.LogRetentionDays | Should -Be 30               # invalid enforced value ignored
+            $settings.LastFolder | Should -Be ''                     # not policy-controllable
+            Test-TbmSettingEnforced -Name 'Transport' | Should -BeTrue
+            Test-TbmSettingEnforced -Name 'PacingDelayMs' | Should -BeFalse
+            Get-TbmPolicySource -Name 'Transport' | Should -Be 'HKLM\SOFTWARE\Policies\TeamsBlastMessenger\Enforced'
+            Get-TbmPolicySource -Name 'LogLevel' | Should -Be 'HKCU\SOFTWARE\Policies\TeamsBlastMessenger\Defaults'
+        }
+    }
+
+    It 'saves only personal changes, so later policy default changes still reach the user' {
+        InModuleScope TeamsBlastMessenger {
+            $script:orgPacing = 200
+            Mock Read-TbmRegistryPolicy {
+                if ($Hive -eq 'LocalMachine' -and $Section -eq 'Defaults') { return @{ PacingDelayMs = $script:orgPacing } }
+                if ($Hive -eq 'LocalMachine' -and $Section -eq 'Enforced') { return @{ Transport = 'Graph' } }
+                return $null
+            }
+            $settings = Get-TbmSettings
+            $settings.PacingDelayMs | Should -Be 200
+            $settings.LogLevel = 'Debug'
+            $settings.Transport = 'DeepLinkAuto'
+            Save-TbmSettings -Settings $settings
+
+            $saved = ConvertFrom-Json -InputObject ([System.IO.File]::ReadAllText((Get-TbmAppDataPath -Name 'Settings')))
+            ($saved.PSObject.Properties.Name) | Should -Be @('LogLevel')
+
+            $script:orgPacing = 750
+            $reloaded = Get-TbmSettings
+            $reloaded.PacingDelayMs | Should -Be 750
+            $reloaded.LogLevel | Should -Be 'Debug'
+            $reloaded.Transport | Should -Be 'Graph'
+        }
+    }
+
+    It 'ships ADMX/ADML templates and an example .reg that match the settings schema' {
+        InModuleScope TeamsBlastMessenger -Parameters @{ Root = $script:ProjectRoot } {
+            param($Root)
+            $policyFolder = [System.IO.Path]::Combine($Root, 'Policy')
+            $admx = [System.Xml.XmlDocument]::new(); $admx.Load([System.IO.Path]::Combine($policyFolder, 'TeamsBlastMessenger.admx'))
+            $adml = [System.Xml.XmlDocument]::new(); $adml.Load([System.IO.Path]::Combine($policyFolder, 'en-US', 'TeamsBlastMessenger.adml'))
+            $ns = [System.Xml.XmlNamespaceManager]::new($admx.NameTable); $ns.AddNamespace('p', 'http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions')
+            $nsl = [System.Xml.XmlNamespaceManager]::new($adml.NameTable); $nsl.AddNamespace('p', 'http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions')
+
+            $strings = [System.Collections.Generic.HashSet[string]]::new()
+            foreach ($node in $adml.SelectNodes('//p:stringTable/p:string', $nsl)) { [void]$strings.Add($node.GetAttribute('id')) }
+            $presentations = [System.Collections.Generic.HashSet[string]]::new()
+            foreach ($node in $adml.SelectNodes('//p:presentationTable/p:presentation', $nsl)) { [void]$presentations.Add($node.GetAttribute('id')) }
+            foreach ($match in [System.Text.RegularExpressions.Regex]::Matches($admx.OuterXml, '\$\((string|presentation)\.([A-Za-z0-9_]+)\)')) {
+                if ($match.Groups[1].Value -eq 'string') { $strings.Contains($match.Groups[2].Value) | Should -BeTrue -Because $match.Value }
+                else { $presentations.Contains($match.Groups[2].Value) | Should -BeTrue -Because $match.Value }
+            }
+
+            $schema = Get-TbmSettingSchema
+            $expected = [System.Collections.Generic.List[string]]::new()
+            foreach ($name in $schema.Keys) { if ($schema[$name].Policy) { $expected.Add($name) } }
+            foreach ($section in @('Defaults', 'Enforced')) {
+                $found = [System.Collections.Generic.List[string]]::new()
+                foreach ($policy in $admx.SelectNodes(('//p:policy[@key="SOFTWARE\Policies\TeamsBlastMessenger\{0}"]' -f $section), $ns)) {
+                    foreach ($element in $policy.SelectNodes('p:elements/*', $ns)) {
+                        $name = $element.GetAttribute('valueName')
+                        $found.Add($name)
+                        if ($element.LocalName -eq 'enum') {
+                            foreach ($value in $element.SelectNodes('.//p:string', $ns)) { (Test-TbmSettingValue -Name $name -Value $value.InnerText).Valid | Should -BeTrue -Because "$name=$($value.InnerText)" }
+                        }
+                        if ($element.LocalName -eq 'decimal') {
+                            [int]$element.GetAttribute('minValue') | Should -Be $schema[$name].Min
+                            [int]$element.GetAttribute('maxValue') | Should -Be $schema[$name].Max
+                        }
+                    }
+                }
+                $found.Sort(); $expected.Sort()
+                $found | Should -Be $expected
+            }
+
+            $regPath = [System.IO.Path]::Combine($policyFolder, 'Example-Policy.reg')
+            [System.IO.File]::ReadAllLines($regPath)[0] | Should -Be 'Windows Registry Editor Version 5.00'
+            foreach ($line in [System.IO.File]::ReadAllLines($regPath)) {
+                $match = [System.Text.RegularExpressions.Regex]::Match($line, '^"([^"]+)"=(?:"([^"]*)"|dword:([0-9a-fA-F]{8}))$')
+                if (-not $match.Success) { continue }
+                $value = $match.Groups[2].Value
+                if ($match.Groups[3].Success) { $value = [System.Convert]::ToInt32($match.Groups[3].Value, 16) }
+                (Test-TbmSettingValue -Name (Resolve-TbmSettingName -Name $match.Groups[1].Value) -Value $value).Valid | Should -BeTrue -Because $line
+            }
+        }
+    }
+}
+
 Describe 'Deep links' {
     It 'encodes users, topic and message' {
         InModuleScope TeamsBlastMessenger {

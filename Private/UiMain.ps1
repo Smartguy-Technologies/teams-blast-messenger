@@ -122,6 +122,8 @@ function Initialize-TbmMainWindowState {
     $ui = $script:TbmUi
     Set-TbmComboByTag -ComboBox $ui.C.CmbTransport -Value ([string]$ui.Settings.Transport)
     Set-TbmComboByTag -ComboBox $ui.C.CmbFormat -Value ([string]$ui.Settings.MessageFormat)
+    [void](Set-TbmPolicyLock -Control $ui.C.CmbTransport -SettingName 'Transport')
+    [void](Set-TbmPolicyLock -Control $ui.C.CmbFormat -SettingName 'MessageFormat')
     Restore-TbmDraft
     Update-TbmTokenList
     Update-TbmConnectionDisplay
@@ -961,9 +963,12 @@ function Set-TbmUiBusy {
 
     $ui = $script:TbmUi
     $ui.Busy = $Busy
-    foreach ($name in @('BtnBrowse', 'BtnSend', 'BtnTest', 'BtnPreviewAll', 'CmbTransport', 'BtnConnect', 'BtnDisconnect', 'BtnSettings', 'BtnHistory', 'BtnInteractions', 'RadIndividual', 'RadGroup', 'CmbFormat')) {
+    foreach ($name in @('BtnBrowse', 'BtnSend', 'BtnTest', 'BtnPreviewAll', 'BtnConnect', 'BtnDisconnect', 'BtnSettings', 'BtnHistory', 'BtnInteractions', 'RadIndividual', 'RadGroup')) {
         $ui.C[$name].IsEnabled = -not $Busy
     }
+    # Boxes locked by organization policy stay locked after a send.
+    $ui.C.CmbTransport.IsEnabled = (-not $Busy) -and -not (Test-TbmSettingEnforced -Name 'Transport')
+    $ui.C.CmbFormat.IsEnabled = (-not $Busy) -and -not (Test-TbmSettingEnforced -Name 'MessageFormat')
     $ui.C.TxtTopic.IsEnabled = (-not $Busy) -and [bool]$ui.C.RadGroup.IsChecked
     $ui.C.TxtMessage.IsReadOnly = $Busy
     $ui.C.BtnCancel.IsEnabled = $Busy
