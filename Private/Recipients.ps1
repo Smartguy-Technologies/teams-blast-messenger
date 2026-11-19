@@ -250,16 +250,7 @@ function Test-TbmEmailAddress {
         [string]$Value
     )
 
-    if ([string]::IsNullOrWhiteSpace($Value)) { return $false }
-    $trimmed = $Value.Trim()
-    if ($trimmed.Contains(' ') -or $trimmed.Contains(',') -or $trimmed.Contains(';')) { return $false }
-    try {
-        $address = [System.Net.Mail.MailAddress]::new($trimmed)
-        return [string]::Equals($address.Address, $trimmed, [System.StringComparison]::OrdinalIgnoreCase) -and $address.Host.Contains('.')
-    }
-    catch {
-        return $false
-    }
+    return [TeamsBlastMessenger.TbmText]::IsEmailAddress($Value)
 }
 
 function Update-TbmRecipientValidation {
@@ -282,26 +273,40 @@ function Update-TbmRecipientValidation {
     $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $invalid = 0
     $duplicates = 0
-    foreach ($row in $Table.Rows) {
-        $email = ([string]$row[$RecipientColumn]).Trim()
-        $status = [string]$row[$script:TbmStatusColumn]
-        $isValidationStatus = [string]::IsNullOrEmpty($status) -or $status -eq 'Invalid email' -or $status -eq 'Duplicate'
-        if (-not (Test-TbmEmailAddress -Value $email)) {
-            $invalid++
-            $row[$script:TbmIncludeColumn] = $false
-            if ($isValidationStatus) { $row[$script:TbmStatusColumn] = 'Invalid email' }
-            continue
+    $includeColumn = $Table.Columns[$script:TbmIncludeColumn]
+    $statusColumn = $Table.Columns[$script:TbmStatusColumn]
+    $emailColumn = $Table.Columns[$RecipientColumn]
+    # Suspend view notifications while rows change (one refresh at the end), and only write cells
+    # whose value actually changes, so a bound grid is not redrawn row by row.
+    $Table.BeginLoadData()
+    try {
+        foreach ($row in $Table.Rows) {
+            $email = ([string]$row[$emailColumn]).Trim()
+            $status = [string]$row[$statusColumn]
+            $isValidationStatus = [string]::IsNullOrEmpty($status) -or $status -eq 'Invalid email' -or $status -eq 'Duplicate'
+            $newStatus = $null
+            if (-not [TeamsBlastMessenger.TbmText]::IsEmailAddress($email)) {
+                $invalid++
+                $newStatus = 'Invalid email'
+            }
+            elseif (-not $seen.Add($email)) {
+                $duplicates++
+                $newStatus = 'Duplicate'
+            }
+
+            if ($null -ne $newStatus) {
+                if ([bool]$row[$includeColumn]) { $row[$includeColumn] = $false }
+                if ($isValidationStatus -and $status -ne $newStatus) { $row[$statusColumn] = $newStatus }
+                continue
+            }
+            if ($status -eq 'Invalid email' -or $status -eq 'Duplicate') {
+                $row[$statusColumn] = ''
+                if (-not [bool]$row[$includeColumn]) { $row[$includeColumn] = $true }
+            }
         }
-        if (-not $seen.Add($email)) {
-            $duplicates++
-            $row[$script:TbmIncludeColumn] = $false
-            if ($isValidationStatus) { $row[$script:TbmStatusColumn] = 'Duplicate' }
-            continue
-        }
-        if ($status -eq 'Invalid email' -or $status -eq 'Duplicate') {
-            $row[$script:TbmStatusColumn] = ''
-            $row[$script:TbmIncludeColumn] = $true
-        }
+    }
+    finally {
+        $Table.EndLoadData()
     }
     return [pscustomobject]@{
         Total      = $Table.Rows.Count
@@ -419,6 +424,31 @@ function Get-TbmDelimiter {
 
 #region XLSX (native OpenXML reader)
 
+function Get-TbmZipEntry {
+    <#
+    .SYNOPSIS
+        Finds a package part by name (exact first, then case-insensitive).
+    #>
+    [CmdletBinding()]
+    [OutputType([System.IO.Compression.ZipArchiveEntry])]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNull()]
+        [System.IO.Compression.ZipArchive]$Archive,
+
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$EntryName
+    )
+
+    $entry = $Archive.GetEntry($EntryName)
+    if ($null -ne $entry) { return $entry }
+    foreach ($candidate in $Archive.Entries) {
+        if ([string]::Equals($candidate.FullName, $EntryName, [System.StringComparison]::OrdinalIgnoreCase)) { return $candidate }
+    }
+    return $null
+}
+
 function Get-TbmZipXml {
     [CmdletBinding()]
     [OutputType([System.Xml.XmlDocument])]
@@ -432,21 +462,14 @@ function Get-TbmZipXml {
         [string]$EntryName
     )
 
-    $entry = $Archive.GetEntry($EntryName)
-    if ($null -eq $entry) {
-        foreach ($candidate in $Archive.Entries) {
-            if ([string]::Equals($candidate.FullName, $EntryName, [System.StringComparison]::OrdinalIgnoreCase)) { $entry = $candidate; break }
-        }
-    }
+    $entry = Get-TbmZipEntry -Archive $Archive -EntryName $EntryName
     if ($null -eq $entry) { return $null }
 
     $document = [System.Xml.XmlDocument]::new()
     $document.XmlResolver = $null
     $entryStream = $entry.Open()
     try {
-        $settings = [System.Xml.XmlReaderSettings]::new()
-        $settings.DtdProcessing = [System.Xml.DtdProcessing]::Prohibit
-        $xmlReader = [System.Xml.XmlReader]::Create($entryStream, $settings)
+        $xmlReader = [System.Xml.XmlReader]::Create($entryStream, [TeamsBlastMessenger.TbmXlsx]::CreateReaderSettings())
         try { $document.Load($xmlReader) } finally { $xmlReader.Dispose() }
     }
     finally {
@@ -472,22 +495,7 @@ function Get-TbmNumberFormatKind {
         [string]$FormatCode
     )
 
-    if ($FormatId -in @(14, 15, 16, 17) -or ($FormatId -ge 27 -and $FormatId -le 31) -or ($FormatId -ge 34 -and $FormatId -le 36) -or ($FormatId -ge 50 -and $FormatId -le 58)) { return 'Date' }
-    if ($FormatId -eq 22) { return 'DateTime' }
-    if (($FormatId -ge 18 -and $FormatId -le 21) -or ($FormatId -ge 45 -and $FormatId -le 47) -or $FormatId -in @(32, 33)) { return 'Time' }
-    if ($FormatId -in @(9, 10)) { return 'Percent' }
-    if ([string]::IsNullOrWhiteSpace($FormatCode) -or $FormatCode -eq 'General' -or $FormatCode -eq '@') { return 'Number' }
-
-    # Strip literals ("text", \x, _x, *x) and [colour]/[locale] sections before looking for date/time letters.
-    $code = [System.Text.RegularExpressions.Regex]::Replace($FormatCode.Split(';')[0], '"[^"]*"|\\.|_.|\*.|\[(?![hms]\])[^\]]*\]', '')
-    $code = $code.ToLowerInvariant()
-    $hasTime = $code.Contains('h') -or $code.Contains('s')
-    $hasDate = $code.Contains('y') -or $code.Contains('d') -or ($code.Contains('m') -and -not $hasTime)
-    if ($hasDate -and $hasTime) { return 'DateTime' }
-    if ($hasDate) { return 'Date' }
-    if ($hasTime) { return 'Time' }
-    if ($code.Contains('%')) { return 'Percent' }
-    return 'Number'
+    return [TeamsBlastMessenger.TbmXlsx]::GetNumberFormatKind($FormatId, $FormatCode)
 }
 
 function ConvertTo-TbmCellText {
@@ -509,42 +517,7 @@ function ConvertTo-TbmCellText {
         [bool]$Date1904 = $false
     )
 
-    $culture = [System.Globalization.CultureInfo]::CurrentCulture
-    $serial = $Value
-    if ($Date1904 -and $Kind -ne 'Number' -and $Kind -ne 'Percent') { $serial = $Value + 1462 }
-    switch ($Kind) {
-        'Date' {
-            $date = [datetime]::FromOADate($serial)
-            if ($date.TimeOfDay.Ticks -ne 0) { return $date.ToString('g', $culture) }
-            return $date.ToString('d', $culture)
-        }
-        'DateTime' { return [datetime]::FromOADate($serial).ToString('g', $culture) }
-        'Time' { return [datetime]::FromOADate($serial).ToString('t', $culture) }
-        'Percent' { return ($Value * 100).ToString('0.##', $culture) + '%' }
-        default { return $Value.ToString('G15', $culture) }
-    }
-}
-
-function ConvertFrom-TbmCellReference {
-    <#
-    .SYNOPSIS
-        Converts the column letters of an A1 reference to a zero-based column index.
-    #>
-    [CmdletBinding()]
-    [OutputType([int])]
-    param(
-        [Parameter(Mandatory)]
-        [ValidateNotNullOrEmpty()]
-        [string]$Reference
-    )
-
-    $index = 0
-    foreach ($character in $Reference.ToCharArray()) {
-        if ($character -ge 'A' -and $character -le 'Z') { $index = ($index * 26) + ([int]$character - 64) }
-        elseif ($character -ge 'a' -and $character -le 'z') { $index = ($index * 26) + ([int]$character - 96) }
-        else { break }
-    }
-    return $index - 1
+    return [TeamsBlastMessenger.TbmXlsx]::FormatNumber($Value, $Kind, $Date1904)
 }
 
 function Read-TbmXlsxNative {
@@ -611,34 +584,11 @@ function Read-TbmXlsxNative {
         $sharedStrings = Read-TbmXlsxSharedStrings -Archive $archive
         $styleKinds = Read-TbmXlsxStyleKinds -Archive $archive
 
-        $sheetXml = Get-TbmZipXml -Archive $archive -EntryName $sheetParts[$SheetName]
-        if ($null -eq $sheetXml) { throw [System.IO.InvalidDataException]::new(('Worksheet part for "{0}" not found.' -f $SheetName)) }
-        $sheetNs = [System.Xml.XmlNamespaceManager]::new($sheetXml.NameTable)
-        $sheetNs.AddNamespace('m', $script:TbmSpreadsheetNs)
-
-        $rows = [System.Collections.Generic.List[string[]]]::new()
-        $cells = [System.Collections.Generic.Dictionary[int, string]]::new()
-        foreach ($rowNode in $sheetXml.SelectNodes('/m:worksheet/m:sheetData/m:row', $sheetNs)) {
-            $cells.Clear()
-            $maxColumn = -1
-            $position = 0
-            foreach ($cell in $rowNode.ChildNodes) {
-                if ($cell.LocalName -ne 'c') { continue }
-                $reference = $cell.GetAttribute('r')
-                $column = $position
-                if (-not [string]::IsNullOrEmpty($reference)) { $column = ConvertFrom-TbmCellReference -Reference $reference }
-                $position = $column + 1
-
-                $text = Get-TbmXlsxCellText -Cell $cell -SharedStrings $sharedStrings -StyleKinds $styleKinds -Date1904 $date1904
-                if ($null -ne $text) {
-                    $cells[$column] = $text
-                    if ($column -gt $maxColumn) { $maxColumn = $column }
-                }
-            }
-            $values = [string[]]::new($maxColumn + 1)
-            foreach ($pair in $cells.GetEnumerator()) { $values[$pair.Key] = $pair.Value }
-            $rows.Add($values)
-        }
+        $sheetEntry = Get-TbmZipEntry -Archive $archive -EntryName $sheetParts[$SheetName]
+        if ($null -eq $sheetEntry) { throw [System.IO.InvalidDataException]::new(('Worksheet part for "{0}" not found.' -f $SheetName)) }
+        $sheetStream = $sheetEntry.Open()
+        try { $rows = [TeamsBlastMessenger.TbmXlsx]::ReadSheet($sheetStream, $sharedStrings, $styleKinds, $date1904) }
+        finally { $sheetStream.Dispose() }
 
         return [pscustomobject]@{
             Sheets    = $sheetNames.ToArray()
@@ -662,37 +612,11 @@ function Read-TbmXlsxSharedStrings {
         [System.IO.Compression.ZipArchive]$Archive
     )
 
-    $strings = [System.Collections.Generic.List[string]]::new()
-    $document = Get-TbmZipXml -Archive $Archive -EntryName 'xl/sharedStrings.xml'
-    if ($null -eq $document) { return , $strings }
-    foreach ($item in $document.DocumentElement.ChildNodes) {
-        if ($item.LocalName -ne 'si') { continue }
-        $strings.Add((Get-TbmXlsxRichText -Node $item))
-    }
-    return , $strings
-}
-
-function Get-TbmXlsxRichText {
-    <#
-    .SYNOPSIS
-        Concatenates <t> runs of a shared/inline string, ignoring phonetic (<rPh>) runs.
-    #>
-    [CmdletBinding()]
-    [OutputType([string])]
-    param(
-        [Parameter(Mandatory)]
-        [ValidateNotNull()]
-        [System.Xml.XmlNode]$Node
-    )
-
-    $builder = [System.Text.StringBuilder]::new()
-    foreach ($child in $Node.ChildNodes) {
-        if ($child.LocalName -eq 't') { $null = $builder.Append($child.InnerText) }
-        elseif ($child.LocalName -eq 'r') {
-            foreach ($run in $child.ChildNodes) { if ($run.LocalName -eq 't') { $null = $builder.Append($run.InnerText) } }
-        }
-    }
-    return $builder.ToString()
+    $entry = Get-TbmZipEntry -Archive $Archive -EntryName 'xl/sharedStrings.xml'
+    if ($null -eq $entry) { return , [System.Collections.Generic.List[string]]::new() }
+    $stream = $entry.Open()
+    try { return , [TeamsBlastMessenger.TbmXlsx]::ReadSharedStrings($stream) }
+    finally { $stream.Dispose() }
 }
 
 function Read-TbmXlsxStyleKinds {
@@ -708,82 +632,11 @@ function Read-TbmXlsxStyleKinds {
         [System.IO.Compression.ZipArchive]$Archive
     )
 
-    $kinds = [System.Collections.Generic.List[string]]::new()
-    $document = Get-TbmZipXml -Archive $Archive -EntryName 'xl/styles.xml'
-    if ($null -eq $document) { return , $kinds }
-    $ns = [System.Xml.XmlNamespaceManager]::new($document.NameTable)
-    $ns.AddNamespace('m', $script:TbmSpreadsheetNs)
-
-    $customFormats = [System.Collections.Generic.Dictionary[int, string]]::new()
-    foreach ($format in $document.SelectNodes('/m:styleSheet/m:numFmts/m:numFmt', $ns)) {
-        $customFormats[[int]$format.GetAttribute('numFmtId')] = $format.GetAttribute('formatCode')
-    }
-    foreach ($xf in $document.SelectNodes('/m:styleSheet/m:cellXfs/m:xf', $ns)) {
-        $formatId = 0
-        $null = [int]::TryParse($xf.GetAttribute('numFmtId'), [ref]$formatId)
-        $code = $null
-        $null = $customFormats.TryGetValue($formatId, [ref]$code)
-        $kinds.Add((Get-TbmNumberFormatKind -FormatId $formatId -FormatCode $code))
-    }
-    return , $kinds
-}
-
-function Get-TbmXlsxCellText {
-    [CmdletBinding()]
-    [OutputType([string])]
-    param(
-        [Parameter(Mandatory)]
-        [ValidateNotNull()]
-        [System.Xml.XmlElement]$Cell,
-
-        [Parameter(Mandatory)]
-        [AllowEmptyCollection()]
-        [System.Collections.Generic.List[string]]$SharedStrings,
-
-        [Parameter(Mandatory)]
-        [AllowEmptyCollection()]
-        [System.Collections.Generic.List[string]]$StyleKinds,
-
-        [Parameter()]
-        [bool]$Date1904 = $false
-    )
-
-    $type = $Cell.GetAttribute('t')
-    $rawValue = $null
-    $inline = $null
-    foreach ($child in $Cell.ChildNodes) {
-        if ($child.LocalName -eq 'v') { $rawValue = $child.InnerText }
-        elseif ($child.LocalName -eq 'is') { $inline = $child }
-    }
-
-    switch ($type) {
-        's' {
-            $index = 0
-            if ([int]::TryParse($rawValue, [ref]$index) -and $index -ge 0 -and $index -lt $SharedStrings.Count) { return $SharedStrings[$index] }
-            return $null
-        }
-        'inlineStr' { if ($null -ne $inline) { return Get-TbmXlsxRichText -Node $inline } return $null }
-        'str' { return $rawValue }
-        'b' { if ($rawValue -eq '1') { return 'TRUE' } return 'FALSE' }
-        'e' { return $rawValue }
-    }
-
-    if ([string]::IsNullOrEmpty($rawValue)) { return $null }
-    $number = 0.0
-    if (-not [double]::TryParse($rawValue, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$number)) { return $rawValue }
-
-    $kind = 'Number'
-    $styleIndex = 0
-    $styleAttribute = $Cell.GetAttribute('s')
-    if (-not [string]::IsNullOrEmpty($styleAttribute) -and [int]::TryParse($styleAttribute, [ref]$styleIndex) -and $styleIndex -lt $StyleKinds.Count) {
-        $kind = $StyleKinds[$styleIndex]
-    }
-    try {
-        return ConvertTo-TbmCellText -Value $number -Kind $kind -Date1904 $Date1904
-    }
-    catch {
-        return $number.ToString('G15', [System.Globalization.CultureInfo]::CurrentCulture)
-    }
+    $entry = Get-TbmZipEntry -Archive $Archive -EntryName 'xl/styles.xml'
+    if ($null -eq $entry) { return , [System.Collections.Generic.List[string]]::new() }
+    $stream = $entry.Open()
+    try { return , [TeamsBlastMessenger.TbmXlsx]::ReadStyleKinds($stream) }
+    finally { $stream.Dispose() }
 }
 
 #endregion
@@ -803,8 +656,8 @@ function Read-TbmWorkbookFallback {
     )
 
     $extension = [System.IO.Path]::GetExtension($Path).ToLowerInvariant()
-    $importExcel = Get-Module -ListAvailable -Name 'ImportExcel'
-    if ($extension -ne '.xls' -and $null -ne $importExcel -and @($importExcel).Count -gt 0) {
+    $importExcel = Get-TbmAvailableModule -Name 'ImportExcel'
+    if ($extension -ne '.xls' -and $importExcel.Length -gt 0) {
         try {
             return Read-TbmWorkbookImportExcel -Path $Path -SheetName $SheetName
         }

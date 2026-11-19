@@ -175,7 +175,7 @@ Everything lives in `%APPDATA%\TeamsBlastMessenger`:
 | Path | Contents |
 |---|---|
 | `Logs\TBM_yyyyMMdd.log` | UTC timestamps, thread IDs, every Graph call (method, path, status, duration), each recipient outcome and full exception details. Tokens and message bodies are never logged |
-| `History\*.json` | One file per blast (plus a `.journal` while sending) |
+| `History\*.json` | One file per blast (plus a `.journal` while sending, and a small `.json.summary` the History list reads so it opens quickly) |
 | `settings.json` | Your personal setting changes (only values that differ from the defaults; see *Deploying to a group*) |
 | `Cache\token.bin` | DPAPI-encrypted refresh token (app registration mode) |
 | `Cache\draft.json` | Your last message draft |
@@ -239,7 +239,8 @@ Invalid or unknown values are ignored and logged, so a typo never stops the app.
 
 ## Limits and notes
 
-* **Throttling.** There is a 1 second delay between messages by default (Settings). Graph `429`/`503` responses are retried automatically, honoring `Retry-After`.
+* **Throttling.** Graph sends start at least 1 second apart by default (*Delay between messages* in Settings). The time a send takes counts toward that delay, so the pace never goes above the setting. Deep-link sends always wait the full delay after each message, so Teams can finish sending before the next chat opens. Graph `429`/`503` responses are retried automatically, honoring `Retry-After`.
+* **Batching.** Recipient lookups, and the chat reads in an interaction scan, use Graph JSON batching (20 requests per call). Messages are still sent one at a time, so each recipient gets their own status and retry.
   * Microsoft discourages mass chat messaging through Graph, so keep batches reasonable.
   * For organization-wide announcements, consider a channel post or Viva Amplify.
 * **Recipients must be in your directory.** External, guest or blocked users fail with a clear reason, and you can retry them from History.
@@ -265,11 +266,19 @@ Private\History.ps1             history store, journal, CSV export
 Private\Interactions.ps1        reply discovery and statistics
 Private\Ui*.ps1, Public\        WPF windows (XAML in Xaml\)
 Policy\                         Group Policy ADMX/ADML templates and an example .reg
-Tests\                          Pester tests for the non-UI logic
+Tests\                          Pester tests for the non-UI logic; Benchmarks.ps1 (timings, not run by Pester)
 ```
 
 Run the tests (Pester 5+):
 
 ```powershell
 Invoke-Pester -Path .\Tests
+```
+
+The tests also check the coding rules: every file is ASCII, output is discarded with `$null =` (not `[void]`), strings and arrays are never built with `+=`, and nothing is piped into `Out-Null`, `ForEach-Object`, `Where-Object`, `Select-Object` or `Sort-Object`.
+
+To see the measurements behind these rules, and the XLSX import time, on your own PowerShell:
+
+```powershell
+powershell.exe -NoProfile -File .\Tests\Benchmarks.ps1
 ```

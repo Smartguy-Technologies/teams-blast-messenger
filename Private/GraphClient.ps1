@@ -235,8 +235,8 @@ function Invoke-TbmGraphRequest {
         $errorMessage = $response.Content
         try {
             $errorObject = ConvertFrom-Json -InputObject $response.Content
-            $code = Get-TbmPropertyValue -InputObject $errorObject -Name 'error.code'
-            $message = Get-TbmPropertyValue -InputObject $errorObject -Name 'error.message'
+            $code = [TeamsBlastMessenger.TbmObject]::GetValue($errorObject, 'error.code')
+            $message = [TeamsBlastMessenger.TbmObject]::GetValue($errorObject, 'error.message')
             if ($null -ne $code) { $errorCode = [string]$code }
             if ($null -ne $message) { $errorMessage = [string]$message }
         }
@@ -286,7 +286,7 @@ function Invoke-TbmGraphPagedRequest {
         $page++
         $response = Invoke-TbmGraphRequest -AuthState $AuthState -Method GET -Path $next -Headers $Headers -Sync $Sync
         $stop = $false
-        $values = Get-TbmPropertyValue -InputObject $response -Name 'value'
+        $values = [TeamsBlastMessenger.TbmObject]::GetValue($response, 'value')
         if ($null -ne $values) {
             foreach ($value in $values) {
                 $items.Add($value)
@@ -294,7 +294,7 @@ function Invoke-TbmGraphPagedRequest {
             }
         }
         if ($stop) { break }
-        $next = [string](Get-TbmPropertyValue -InputObject $response -Name '@odata.nextLink')
+        $next = [string]([TeamsBlastMessenger.TbmObject]::GetValue($response, '@odata.nextLink'))
     }
     if ($page -ge $MaxPages -and -not [string]::IsNullOrEmpty($next)) {
         Write-TbmLog -Level Warn -Source 'Graph' -Message ('Stopped paging {0} after {1} page(s); results may be incomplete.' -f $Path, $MaxPages)
@@ -302,9 +302,250 @@ function Invoke-TbmGraphPagedRequest {
     return , $items
 }
 
+$script:TbmGraphBatchSize = 20
+
+function ConvertTo-TbmBatchUrl {
+    <#
+    .SYNOPSIS
+        Turns a Graph path or absolute v1.0 URL (for example an @odata.nextLink) into the relative URL a $batch request expects.
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Path
+    )
+
+    $url = $Path
+    if ($url.StartsWith($script:TbmGraphBaseUri, [System.StringComparison]::OrdinalIgnoreCase)) { $url = $url.Substring($script:TbmGraphBaseUri.Length) }
+    if (-not $url.StartsWith('/')) { $url = '/' + $url }
+    return $url.Replace(' ', '%20')
+}
+
+function Invoke-TbmGraphBatch {
+    <#
+    .SYNOPSIS
+        Runs GET requests through Graph JSON batching (20 per call) and returns each response by request id.
+    .DESCRIPTION
+        Each request is a hashtable: Id (unique string), Path (relative path or absolute v1.0 URL) and optional Headers.
+        Items that come back 429/502/503/504 are retried in a later batch after the longest Retry-After among them;
+        items that succeeded or failed permanently are never resent. The batch call itself goes through
+        Invoke-TbmGraphRequest, so token refresh and whole-call retries are shared with single requests.
+    .OUTPUTS
+        Dictionary[string, pscustomobject] of Id -> Status (int), Body (parsed JSON or $null), Headers.
+    #>
+    [CmdletBinding()]
+    [OutputType([System.Collections.Generic.Dictionary[string, object]])]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNull()]
+        [hashtable]$AuthState,
+
+        [Parameter(Mandatory)]
+        [AllowEmptyCollection()]
+        [System.Collections.Generic.List[hashtable]]$Requests,
+
+        [Parameter()]
+        [ValidateRange(0, 10)]
+        [int]$MaxRetries = 6,
+
+        [Parameter()]
+        [hashtable]$Sync
+    )
+
+    $results = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::Ordinal)
+    $pending = [System.Collections.Generic.List[hashtable]]::new()
+    $ids = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    foreach ($request in $Requests) {
+        if (-not $ids.Add([string]$request.Id)) { throw [System.ArgumentException]::new(('Duplicate batch request id "{0}".' -f $request.Id)) }
+        $pending.Add($request)
+    }
+
+    $attempt = 0
+    while ($pending.Count -gt 0) {
+        $attempt++
+        $retry = [System.Collections.Generic.List[hashtable]]::new()
+        $retryAfterSeconds = 0
+        for ($offset = 0; $offset -lt $pending.Count; $offset = $offset + $script:TbmGraphBatchSize) {
+            if ($null -ne $Sync -and [bool]$Sync['Cancel']) { throw [System.OperationCanceledException]::new('Cancelled.') }
+            $byId = [System.Collections.Generic.Dictionary[string, hashtable]]::new([System.StringComparer]::Ordinal)
+            $entries = [System.Collections.Generic.List[object]]::new()
+            $end = [System.Math]::Min($pending.Count, $offset + $script:TbmGraphBatchSize)
+            for ($i = $offset; $i -lt $end; $i++) {
+                $request = $pending[$i]
+                $byId[[string]$request.Id] = $request
+                $entry = [ordered]@{ id = [string]$request.Id; method = 'GET'; url = (ConvertTo-TbmBatchUrl -Path ([string]$request.Path)) }
+                if ($request.ContainsKey('Headers') -and $null -ne $request.Headers -and $request.Headers.Count -gt 0) { $entry['headers'] = $request.Headers }
+                $entries.Add($entry)
+            }
+
+            $response = Invoke-TbmGraphRequest -AuthState $AuthState -Method POST -Path '/$batch' -Body @{ requests = $entries.ToArray() } -MaxRetries $MaxRetries -Sync $Sync
+            $answered = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+            $responses = [TeamsBlastMessenger.TbmObject]::GetValue($response, 'responses')
+            if ($null -ne $responses) {
+                foreach ($item in $responses) {
+                    $id = [string]([TeamsBlastMessenger.TbmObject]::GetValue($item, 'id'))
+                    if (-not $byId.ContainsKey($id) -or -not $answered.Add($id)) { continue }
+                    $status = [int]([TeamsBlastMessenger.TbmObject]::GetValue($item, 'status'))
+                    $headers = [TeamsBlastMessenger.TbmObject]::GetValue($item, 'headers')
+                    $transient = $status -eq 429 -or $status -eq 502 -or $status -eq 503 -or $status -eq 504
+                    if ($transient -and $attempt -le $MaxRetries) {
+                        $retry.Add($byId[$id])
+                        $seconds = 0
+                        if ([int]::TryParse([string]([TeamsBlastMessenger.TbmObject]::GetValue($headers, 'Retry-After')), [ref]$seconds) -and $seconds -gt $retryAfterSeconds) { $retryAfterSeconds = $seconds }
+                        continue
+                    }
+                    $results[$id] = [pscustomobject]@{ Id = $id; Status = $status; Body = ([TeamsBlastMessenger.TbmObject]::GetValue($item, 'body')); Headers = $headers }
+                }
+            }
+            foreach ($id in $byId.Keys) {
+                if ($answered.Contains($id)) { continue }
+                # Graph answers every request it receives; treat a missing answer as transient.
+                if ($attempt -le $MaxRetries) { $retry.Add($byId[$id]) }
+                else { $results[$id] = [pscustomobject]@{ Id = $id; Status = 0; Body = $null; Headers = $null } }
+            }
+        }
+
+        if ($retry.Count -gt 0) {
+            $delay = $retryAfterSeconds * 1000
+            if ($delay -le 0) { $delay = [int][System.Math]::Min(60000, 1000 * [System.Math]::Pow(2, $attempt)) }
+            Write-TbmLog -Level Warn -Source 'Graph' -Message ('Batch: {0} request(s) throttled/unavailable; retrying them in {1} ms (attempt {2}/{3}).' -f $retry.Count, $delay, $attempt, $MaxRetries)
+            if (-not (Wait-TbmDelay -Milliseconds $delay -Sync $Sync)) { throw [System.OperationCanceledException]::new('Cancelled.') }
+        }
+        $pending = $retry
+    }
+    return , $results
+}
+
+function New-TbmBatchItemException {
+    <#
+    .SYNOPSIS
+        Builds the TbmGraphException a single request would have thrown, from a failed batch item.
+    #>
+    [CmdletBinding()]
+    [OutputType([TeamsBlastMessenger.TbmGraphException])]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNull()]
+        [object]$Result,
+
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Path
+    )
+
+    $code = [string]([TeamsBlastMessenger.TbmObject]::GetValue($Result.Body, 'error.code'))
+    $message = [string]([TeamsBlastMessenger.TbmObject]::GetValue($Result.Body, 'error.message'))
+    if ([string]::IsNullOrEmpty($code)) { $code = 'Unknown' }
+    if ([string]::IsNullOrEmpty($message)) { $message = 'Graph returned status {0}.' -f $Result.Status }
+    $requestId = [string]([TeamsBlastMessenger.TbmObject]::GetValue($Result.Headers, 'request-id'))
+    return [TeamsBlastMessenger.TbmGraphException]::new([int]$Result.Status, $code, $message, $requestId, 'GET', (ConvertTo-TbmBatchUrl -Path $Path))
+}
+
 #endregion
 
 #region Graph operations
+
+function ConvertTo-TbmResolvedUser {
+    [CmdletBinding()]
+    [OutputType([pscustomobject])]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNull()]
+        [object]$User
+    )
+    return [pscustomobject]@{
+        Id          = [string]([TeamsBlastMessenger.TbmObject]::GetValue($User, 'id'))
+        DisplayName = [string]([TeamsBlastMessenger.TbmObject]::GetValue($User, 'displayName'))
+        Upn         = [string]([TeamsBlastMessenger.TbmObject]::GetValue($User, 'userPrincipalName'))
+        Mail        = [string]([TeamsBlastMessenger.TbmObject]::GetValue($User, 'mail'))
+    }
+}
+
+function Resolve-TbmGraphUsers {
+    <#
+    .SYNOPSIS
+        Looks up many emails/UPNs in a few $batch calls and fills the cache Resolve-TbmGraphUser reads.
+    .DESCRIPTION
+        Same rules as Resolve-TbmGraphUser: UPN lookup first, then a mail filter for addresses that returned 404;
+        a miss on both is cached as $null (not found). Any other failure is left uncached, so the per-user call
+        that follows reports the real error. If batching fails as a whole, everything is left to the per-user path.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNull()]
+        [hashtable]$AuthState,
+
+        [Parameter(Mandatory)]
+        [AllowEmptyCollection()]
+        [AllowEmptyString()]
+        [string[]]$Emails,
+
+        [Parameter(Mandatory)]
+        [ValidateNotNull()]
+        [System.Collections.Generic.Dictionary[string, object]]$Cache,
+
+        [Parameter()]
+        [hashtable]$Sync
+    )
+
+    $keys = [System.Collections.Generic.List[string]]::new()
+    $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($email in $Emails) {
+        if ([string]::IsNullOrWhiteSpace($email)) { continue }
+        $key = $email.Trim().ToLowerInvariant()
+        if ($Cache.ContainsKey($key) -or -not $seen.Add($key)) { continue }
+        $keys.Add($key)
+    }
+    if ($keys.Count -eq 0) { return }
+
+    $select = '$select=id,displayName,userPrincipalName,mail'
+    $resolved = 0
+    try {
+        $requests = [System.Collections.Generic.List[hashtable]]::new()
+        for ($i = 0; $i -lt $keys.Count; $i++) {
+            $requests.Add(@{ Id = [string]$i; Path = ('/users/{0}?{1}' -f [System.Uri]::EscapeDataString($keys[$i]), $select) })
+        }
+        $byUpn = Invoke-TbmGraphBatch -AuthState $AuthState -Requests $requests -Sync $Sync
+
+        $mailRequests = [System.Collections.Generic.List[hashtable]]::new()
+        for ($i = 0; $i -lt $keys.Count; $i++) {
+            $result = $null
+            if (-not $byUpn.TryGetValue([string]$i, [ref]$result)) { continue }
+            if ($result.Status -eq 200 -and $null -ne $result.Body) {
+                $Cache[$keys[$i]] = ConvertTo-TbmResolvedUser -User $result.Body
+                $resolved++
+            }
+            elseif ($result.Status -eq 404) {
+                $filter = [System.Uri]::EscapeDataString(("mail eq '{0}'" -f $keys[$i].Replace("'", "''")))
+                $mailRequests.Add(@{ Id = [string]$i; Path = ('/users?$filter={0}&{1}' -f $filter, $select) })
+            }
+        }
+
+        if ($mailRequests.Count -gt 0) {
+            $byMail = Invoke-TbmGraphBatch -AuthState $AuthState -Requests $mailRequests -Sync $Sync
+            foreach ($request in $mailRequests) {
+                $result = $null
+                if (-not $byMail.TryGetValue($request.Id, [ref]$result) -or $result.Status -ne 200) { continue }
+                $key = $keys[[int]$request.Id]
+                $found = [TeamsBlastMessenger.TbmObject]::GetValue($result.Body, 'value')
+                $first = $null
+                if ($null -ne $found) { foreach ($candidate in $found) { $first = $candidate; break } }
+                if ($null -eq $first) { $Cache[$key] = $null }
+                else { $Cache[$key] = ConvertTo-TbmResolvedUser -User $first; $resolved++ }
+            }
+        }
+    }
+    catch [System.OperationCanceledException] { throw }
+    catch {
+        Write-TbmLog -Level Warn -Source 'Graph' -Message ('Bulk user lookup failed ({0}); looking users up one at a time.' -f $_.Exception.Message)
+        return
+    }
+    Write-TbmLog -Level Info -Source 'Graph' -Message ('Bulk user lookup: {0} of {1} address(es) resolved.' -f $resolved, $keys.Count)
+}
+
 
 function Resolve-TbmGraphUser {
     <#
@@ -339,19 +580,12 @@ function Resolve-TbmGraphUser {
     if ($null -eq $user) {
         $filter = [System.Uri]::EscapeDataString(("mail eq '{0}'" -f $key.Replace("'", "''")))
         $result = Invoke-TbmGraphRequest -AuthState $AuthState -Path ('/users?$filter={0}&{1}' -f $filter, $select) -Sync $Sync
-        $found = Get-TbmPropertyValue -InputObject $result -Name 'value'
-        if ($null -ne $found -and @($found).Count -gt 0) { $user = @($found)[0] }
+        $found = [TeamsBlastMessenger.TbmObject]::GetValue($result, 'value')
+        if ($null -ne $found) { foreach ($candidate in $found) { $user = $candidate; break } }
     }
 
     $resolved = $null
-    if ($null -ne $user) {
-        $resolved = [pscustomobject]@{
-            Id          = [string]$user.id
-            DisplayName = [string](Get-TbmPropertyValue -InputObject $user -Name 'displayName')
-            Upn         = [string](Get-TbmPropertyValue -InputObject $user -Name 'userPrincipalName')
-            Mail        = [string](Get-TbmPropertyValue -InputObject $user -Name 'mail')
-        }
-    }
+    if ($null -ne $user) { $resolved = ConvertTo-TbmResolvedUser -User $user }
     if ($null -ne $Cache) { $Cache[$key] = $resolved }
     return $resolved
 }
@@ -437,7 +671,7 @@ function Send-TbmGraphChatMessage {
     $message = Invoke-TbmGraphRequest -AuthState $AuthState -Method POST -Path $path -Body $body -Sync $Sync -MaxRetries 4
     return [pscustomobject]@{
         Id         = [string]$message.id
-        CreatedUtc = ConvertTo-TbmUtcDateTime -Value (Get-TbmPropertyValue -InputObject $message -Name 'createdDateTime')
+        CreatedUtc = [TeamsBlastMessenger.TbmObject]::ToUtc([TeamsBlastMessenger.TbmObject]::GetValue($message, 'createdDateTime'))
     }
 }
 

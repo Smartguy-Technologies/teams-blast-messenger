@@ -86,6 +86,12 @@ function Invoke-TbmInteractionScan {
 
     # 1. Make sure every result has a user id (deep-link sends never resolved them).
     $userCache = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $unresolved = [System.Collections.Generic.List[string]]::new()
+    foreach ($result in $results) { if ([string]::IsNullOrEmpty($result.UserId)) { $unresolved.Add($result.Email) } }
+    if ($unresolved.Count -gt 1) {
+        Add-TbmSyncEvent -Sync $Sync -Type Progress -Data @{ Current = 0; Total = $results.Count; Text = ('Resolving {0} recipient(s)' -f $unresolved.Count) }
+        Resolve-TbmGraphUsers -AuthState $AuthState -Emails $unresolved.ToArray() -Cache $userCache -Sync $Sync
+    }
     $step = 0
     foreach ($result in $results) {
         $step++
@@ -140,31 +146,35 @@ function Invoke-TbmInteractionScan {
         $null = $messageIdsByChat[$recipient.ChatId].Add($recipient.MessageId)
     }
 
-    $chatNumber = 0
+    $chats = [System.Collections.Generic.List[hashtable]]::new()
     foreach ($pair in $byChat.GetEnumerator()) {
-        $chatNumber++
-        if ($null -ne $Sync -and [bool]$Sync['Cancel']) { throw [System.OperationCanceledException]::new('Cancelled.') }
+        $since = [datetime]::MaxValue
+        foreach ($result in $pair.Value) { if ([datetime]$result.SentUtc -lt $since) { $since = [datetime]$result.SentUtc } }
+        $chats.Add(@{ ChatId = $pair.Key; SinceUtc = $since })
+    }
+    Add-TbmSyncEvent -Sync $Sync -Type Progress -Data @{ Current = 0; Total = $chats.Count; Text = ('Reading {0} chat(s)' -f $chats.Count) }
+    $messagesByChat = Get-TbmChatMessagesBatch -AuthState $AuthState -Chats $chats -MaxPages 40 -Sync $Sync
+    $reactionsByChat = Get-TbmBlastReactionsBatch -AuthState $AuthState -MessageIdsByChat $messageIdsByChat -Sync $Sync
+
+    foreach ($pair in $byChat.GetEnumerator()) {
         $chatId = $pair.Key
         $chatResults = $pair.Value
-        Add-TbmSyncEvent -Sync $Sync -Type Progress -Data @{ Current = $chatNumber; Total = $byChat.Count; Text = ('Reading chat {0} of {1}' -f $chatNumber, $byChat.Count) }
-
-        $since = [datetime]::MaxValue
-        foreach ($result in $chatResults) { if ([datetime]$result.SentUtc -lt $since) { $since = [datetime]$result.SentUtc } }
-
-        $blastMessageIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
-        if ($messageIdsByChat.ContainsKey($chatId)) { $blastMessageIds = $messageIdsByChat[$chatId] }
-
-        try {
-            $messages = Get-TbmChatMessagesSince -AuthState $AuthState -ChatId $chatId -SinceUtc $since -Sync $Sync
-            $reactions = Get-TbmBlastReactions -AuthState $AuthState -ChatId $chatId -MessageIds $blastMessageIds -Sync $Sync
-            Set-TbmInteractionReplies -Results $chatResults -Messages $messages -MeId $meId -BlastMessageIds $blastMessageIds -Reactions $reactions -IsGroup ($Blast.Mode -eq 'Group')
+        $read = $messagesByChat[$chatId]
+        $reactionInfo = $null
+        $reactions = $null
+        $reason = $read.Error
+        if ($reactionsByChat.TryGetValue($chatId, [ref]$reactionInfo)) {
+            $reactions = $reactionInfo.Reactions
+            if ($null -eq $reason) { $reason = $reactionInfo.Error }
         }
-        catch [System.OperationCanceledException] { throw }
-        catch {
-            $reason = Get-TbmFailureMessage -Exception $_.Exception
+        if ($null -ne $reason) {
             Write-TbmLog -Level Warn -Source 'Interactions' -Message ('Reading chat {0} failed: {1}' -f $chatId, $reason)
             foreach ($result in $chatResults) { $result.Error = $reason }
+            continue
         }
+        $blastMessageIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+        if ($messageIdsByChat.ContainsKey($chatId)) { $blastMessageIds = $messageIdsByChat[$chatId] }
+        Set-TbmInteractionReplies -Results $chatResults -Messages $read.Messages -MeId $meId -BlastMessageIds $blastMessageIds -Reactions $reactions -IsGroup ($Blast.Mode -eq 'Group')
     }
 
     $responded = 0
@@ -222,11 +232,11 @@ function Set-TbmInteractionReplies {
     }
 
     foreach ($message in $Messages) {
-        if ([string](Get-TbmPropertyValue -InputObject $message -Name 'messageType') -ne 'message') { continue }
-        if ($null -ne (Get-TbmPropertyValue -InputObject $message -Name 'deletedDateTime')) { continue }
-        $fromId = [string](Get-TbmPropertyValue -InputObject $message -Name 'from.user.id')
+        if ([string]([TeamsBlastMessenger.TbmObject]::GetValue($message, 'messageType')) -ne 'message') { continue }
+        if ($null -ne ([TeamsBlastMessenger.TbmObject]::GetValue($message, 'deletedDateTime'))) { continue }
+        $fromId = [string]([TeamsBlastMessenger.TbmObject]::GetValue($message, 'from.user.id'))
         if ([string]::IsNullOrEmpty($fromId) -or [string]::Equals($fromId, $MeId, [System.StringComparison]::OrdinalIgnoreCase)) { continue }
-        $createdUtc = ConvertTo-TbmUtcDateTime -Value (Get-TbmPropertyValue -InputObject $message -Name 'createdDateTime')
+        $createdUtc = [TeamsBlastMessenger.TbmObject]::ToUtc([TeamsBlastMessenger.TbmObject]::GetValue($message, 'createdDateTime'))
         if ($null -eq $createdUtc) { continue }
 
         $target = $null
@@ -237,17 +247,17 @@ function Set-TbmInteractionReplies {
         }
         if ($null -eq $target -or $createdUtc -le [datetime]$target.SentUtc) { continue }
 
-        $content = [string](Get-TbmPropertyValue -InputObject $message -Name 'body.content')
-        $contentType = [string](Get-TbmPropertyValue -InputObject $message -Name 'body.contentType')
+        $content = [string]([TeamsBlastMessenger.TbmObject]::GetValue($message, 'body.content'))
+        $contentType = [string]([TeamsBlastMessenger.TbmObject]::GetValue($message, 'body.contentType'))
         $text = $content
         if ($contentType -eq 'html') { $text = [TeamsBlastMessenger.TbmText]::StripHtml($content) }
 
         $isDirect = $false
-        $attachments = Get-TbmPropertyValue -InputObject $message -Name 'attachments'
+        $attachments = [TeamsBlastMessenger.TbmObject]::GetValue($message, 'attachments')
         if ($null -ne $attachments) {
             foreach ($attachment in $attachments) {
-                if ([string](Get-TbmPropertyValue -InputObject $attachment -Name 'contentType') -eq 'messageReference' -and
-                    $BlastMessageIds.Contains([string](Get-TbmPropertyValue -InputObject $attachment -Name 'id'))) {
+                if ([string]([TeamsBlastMessenger.TbmObject]::GetValue($attachment, 'contentType')) -eq 'messageReference' -and
+                    $BlastMessageIds.Contains([string]([TeamsBlastMessenger.TbmObject]::GetValue($attachment, 'id')))) {
                     $isDirect = $true
                 }
             }
@@ -255,9 +265,9 @@ function Set-TbmInteractionReplies {
         if ([string]::IsNullOrWhiteSpace($text) -and $null -ne $attachments -and @($attachments).Count -gt 0) { $text = '[attachment]' }
 
         $reply = [TeamsBlastMessenger.TbmReplyMessage]::new()
-        $reply.MessageId = [string](Get-TbmPropertyValue -InputObject $message -Name 'id')
+        $reply.MessageId = [string]([TeamsBlastMessenger.TbmObject]::GetValue($message, 'id'))
         $reply.FromUserId = $fromId
-        $reply.FromName = [string](Get-TbmPropertyValue -InputObject $message -Name 'from.user.displayName')
+        $reply.FromName = [string]([TeamsBlastMessenger.TbmObject]::GetValue($message, 'from.user.displayName'))
         $reply.CreatedUtc = $createdUtc
         $reply.Text = $text
         $reply.IsDirectReply = $isDirect
@@ -265,9 +275,10 @@ function Set-TbmInteractionReplies {
         if ([string]::IsNullOrEmpty($target.UserId)) { $target.UserId = $fromId }
     }
 
+    $replyOrder = [TeamsBlastMessenger.TbmReplyByCreated]::new()
     foreach ($result in $Results) {
         if ($result.Replies.Count -eq 0) { continue }
-        $result.Replies.Sort([System.Comparison[TeamsBlastMessenger.TbmReplyMessage]] { param($left, $right) $left.CreatedUtc.CompareTo($right.CreatedUtc) })
+        $result.Replies.Sort($replyOrder)
         $first = $result.Replies[0]
         $result.Responded = $true
         $result.ReplyCount = $result.Replies.Count
@@ -279,18 +290,10 @@ function Set-TbmInteractionReplies {
     }
 }
 
-function Get-TbmChatMessagesSince {
-    <#
-    .SYNOPSIS
-        Returns chat messages created after SinceUtc, using the server-side lastModifiedDateTime filter when available.
-    #>
+function Get-TbmChatMessagePath {
     [CmdletBinding()]
-    [OutputType([System.Collections.Generic.List[object]])]
+    [OutputType([string])]
     param(
-        [Parameter(Mandatory)]
-        [ValidateNotNull()]
-        [hashtable]$AuthState,
-
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
         [string]$ChatId,
@@ -298,80 +301,198 @@ function Get-TbmChatMessagesSince {
         [Parameter(Mandatory)]
         [datetime]$SinceUtc,
 
-        [Parameter()]
-        [hashtable]$Sync
+        [Parameter(Mandatory)]
+        [bool]$ServerFilter
     )
-
     $chatPath = '/chats/{0}/messages' -f [System.Uri]::EscapeDataString($ChatId)
-    $since = ConvertTo-TbmIsoString -Value $SinceUtc
-    $messages = $null
-    try {
-        $path = '{0}?$top=50&$orderby=lastModifiedDateTime desc&$filter=lastModifiedDateTime gt {1}' -f $chatPath, $since
-        $messages = Invoke-TbmGraphPagedRequest -AuthState $AuthState -Path $path -MaxPages 40 -Sync $Sync
-    }
-    catch [TeamsBlastMessenger.TbmGraphException] {
-        if ($_.Exception.StatusCode -ne 400) { throw }
-        Write-TbmLog -Level Warn -Source 'Interactions' -Message 'Server-side message filter rejected; falling back to newest-first paging.'
-        $path = '{0}?$top=50&$orderby=createdDateTime desc' -f $chatPath
-        $stopWhen = {
-            param($message)
-            $created = ConvertTo-TbmUtcDateTime -Value (Get-TbmPropertyValue -InputObject $message -Name 'createdDateTime')
-            # $SinceUtc resolves through the caller's scope (same module session state).
-            return $null -ne $created -and $created -le $SinceUtc
-        }
-        $messages = Invoke-TbmGraphPagedRequest -AuthState $AuthState -Path $path -MaxPages 40 -Sync $Sync -StopWhen $stopWhen
-    }
-
-    $filtered = [System.Collections.Generic.List[object]]::new()
-    foreach ($message in $messages) {
-        $created = ConvertTo-TbmUtcDateTime -Value (Get-TbmPropertyValue -InputObject $message -Name 'createdDateTime')
-        if ($null -ne $created -and $created -gt $SinceUtc) { $filtered.Add($message) }
-    }
-    return , $filtered
+    if ($ServerFilter) { return '{0}?$top=50&$orderby=lastModifiedDateTime desc&$filter=lastModifiedDateTime gt {1}' -f $chatPath, (ConvertTo-TbmIsoString -Value $SinceUtc) }
+    return '{0}?$top=50&$orderby=createdDateTime desc' -f $chatPath
 }
 
-function Get-TbmBlastReactions {
+function Get-TbmChatMessagesBatch {
     <#
     .SYNOPSIS
-        Reads reactions on the blast message(s) in a chat. Returns userId -> "like, heart".
+        Reads messages created after each chat's SinceUtc, for many chats at once, through Graph $batch.
+    .DESCRIPTION
+        Every round sends the next page of every unfinished chat in one set of batch calls, following
+        @odata.nextLink until a chat's last page or MaxPages. The server-side lastModifiedDateTime filter is
+        tried on the first chat alone; if Graph rejects it (400), every chat uses newest-first paging instead
+        and stops at the first message older than its SinceUtc, so the failing request is made only once.
+    .PARAMETER Chats
+        List of hashtables: ChatId, SinceUtc.
+    .OUTPUTS
+        Dictionary of ChatId -> hashtable with Messages (List[object], created after SinceUtc) and Error (string or $null).
     #>
     [CmdletBinding()]
-    [OutputType([System.Collections.Generic.Dictionary[string, string]])]
+    [OutputType([System.Collections.Generic.Dictionary[string, hashtable]])]
     param(
         [Parameter(Mandatory)]
         [ValidateNotNull()]
         [hashtable]$AuthState,
 
         [Parameter(Mandatory)]
-        [ValidateNotNullOrEmpty()]
-        [string]$ChatId,
-
-        [Parameter(Mandatory)]
         [AllowEmptyCollection()]
-        [System.Collections.Generic.HashSet[string]]$MessageIds,
+        [System.Collections.Generic.List[hashtable]]$Chats,
+
+        [Parameter()]
+        [ValidateRange(1, 1000)]
+        [int]$MaxPages = 40,
 
         [Parameter()]
         [hashtable]$Sync
     )
 
-    $byUser = [System.Collections.Generic.Dictionary[string, System.Collections.Generic.List[string]]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    foreach ($messageId in $MessageIds) {
-        $path = '/chats/{0}/messages/{1}' -f [System.Uri]::EscapeDataString($ChatId), [System.Uri]::EscapeDataString($messageId)
-        $message = Invoke-TbmGraphRequest -AuthState $AuthState -Path $path -AllowNotFound -Sync $Sync
-        $reactions = Get-TbmPropertyValue -InputObject $message -Name 'reactions'
-        if ($null -eq $reactions) { continue }
-        foreach ($reaction in $reactions) {
-            $userId = [string](Get-TbmPropertyValue -InputObject $reaction -Name 'user.user.id')
-            if ([string]::IsNullOrEmpty($userId)) { continue }
-            $name = [string](Get-TbmPropertyValue -InputObject $reaction -Name 'displayName')
-            if ([string]::IsNullOrEmpty($name)) { $name = [string](Get-TbmPropertyValue -InputObject $reaction -Name 'reactionType') }
-            if (-not $byUser.ContainsKey($userId)) { $byUser[$userId] = [System.Collections.Generic.List[string]]::new() }
-            if (-not $byUser[$userId].Contains($name)) { $byUser[$userId].Add($name) }
+    $states = [System.Collections.Generic.List[hashtable]]::new()
+    foreach ($chat in $Chats) {
+        $states.Add(@{ ChatId = [string]$chat.ChatId; Since = [datetime]$chat.SinceUtc; Next = $null; Filtered = $true; Pages = 0; Items = [System.Collections.Generic.List[object]]::new(); Error = $null; Done = $false })
+    }
+
+    $useServerFilter = $true
+    $probed = $false
+    while ($true) {
+        $batch = [System.Collections.Generic.List[hashtable]]::new()
+        $requests = [System.Collections.Generic.List[hashtable]]::new()
+        for ($i = 0; $i -lt $states.Count; $i++) {
+            $state = $states[$i]
+            if ($state.Done) { continue }
+            if ($null -eq $state.Next) {
+                if (-not $probed -and $batch.Count -gt 0) { continue }
+                $state.Filtered = $useServerFilter
+                $state.Next = Get-TbmChatMessagePath -ChatId $state.ChatId -SinceUtc $state.Since -ServerFilter $useServerFilter
+            }
+            $batch.Add($state)
+            $requests.Add(@{ Id = [string]$i; Path = [string]$state.Next })
+            if (-not $probed) { break }
+        }
+        if ($requests.Count -eq 0) { break }
+
+        $answers = Invoke-TbmGraphBatch -AuthState $AuthState -Requests $requests -Sync $Sync
+        foreach ($request in $requests) {
+            $state = $states[[int]$request.Id]
+            $answer = $null
+            if (-not $answers.TryGetValue($request.Id, [ref]$answer)) { $state.Error = 'No response from Microsoft Graph.'; $state.Done = $true; continue }
+
+            if ($answer.Status -eq 400 -and $state.Filtered -and $state.Pages -eq 0) {
+                if ($useServerFilter) { Write-TbmLog -Level Warn -Source 'Interactions' -Message 'Server-side message filter rejected; using newest-first paging for every chat.' }
+                $useServerFilter = $false
+                $state.Filtered = $false
+                $state.Next = Get-TbmChatMessagePath -ChatId $state.ChatId -SinceUtc $state.Since -ServerFilter $false
+                continue
+            }
+            if ($answer.Status -ne 200) {
+                $state.Error = Get-TbmFailureMessage -Exception (New-TbmBatchItemException -Result $answer -Path $request.Path)
+                $state.Done = $true
+                continue
+            }
+
+            $state.Pages++
+            $reachedOlder = $false
+            $values = [TeamsBlastMessenger.TbmObject]::GetValue($answer.Body, 'value')
+            if ($null -ne $values) {
+                foreach ($message in $values) {
+                    $state.Items.Add($message)
+                    if (-not $state.Filtered) {
+                        $created = [TeamsBlastMessenger.TbmObject]::ToUtc([TeamsBlastMessenger.TbmObject]::GetValue($message, 'createdDateTime'))
+                        if ($null -ne $created -and $created -le $state.Since) { $reachedOlder = $true }
+                    }
+                }
+            }
+            $next = [string]([TeamsBlastMessenger.TbmObject]::GetValue($answer.Body, '@odata.nextLink'))
+            if ($reachedOlder -or [string]::IsNullOrEmpty($next)) { $state.Done = $true; continue }
+            if ($state.Pages -ge $MaxPages) {
+                Write-TbmLog -Level Warn -Source 'Interactions' -Message ('Stopped reading chat {0} after {1} page(s); replies may be incomplete.' -f $state.ChatId, $MaxPages)
+                $state.Done = $true
+                continue
+            }
+            $state.Next = $next
+        }
+        $probed = $true
+
+        $finished = 0
+        foreach ($state in $states) { if ($state.Done) { $finished++ } }
+        if ($null -ne $Sync) { Add-TbmSyncEvent -Sync $Sync -Type Progress -Data @{ Current = $finished; Total = $states.Count; Text = ('Read {0} of {1} chat(s)' -f $finished, $states.Count) } }
+    }
+
+    $output = [System.Collections.Generic.Dictionary[string, hashtable]]::new([System.StringComparer]::Ordinal)
+    foreach ($state in $states) {
+        $messages = [System.Collections.Generic.List[object]]::new()
+        foreach ($message in $state.Items) {
+            $created = [TeamsBlastMessenger.TbmObject]::ToUtc([TeamsBlastMessenger.TbmObject]::GetValue($message, 'createdDateTime'))
+            if ($null -ne $created -and $created -gt $state.Since) { $messages.Add($message) }
+        }
+        $output[$state.ChatId] = @{ Messages = $messages; Error = $state.Error }
+    }
+    return , $output
+}
+
+function Get-TbmBlastReactionsBatch {
+    <#
+    .SYNOPSIS
+        Reads reactions on the blast message(s) of many chats through Graph $batch.
+    .OUTPUTS
+        Dictionary of ChatId -> hashtable with Reactions (Dictionary userId -> "like, heart") and Error (string or $null).
+    #>
+    [CmdletBinding()]
+    [OutputType([System.Collections.Generic.Dictionary[string, hashtable]])]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNull()]
+        [hashtable]$AuthState,
+
+        [Parameter(Mandatory)]
+        [ValidateNotNull()]
+        [System.Collections.Generic.Dictionary[string, System.Collections.Generic.HashSet[string]]]$MessageIdsByChat,
+
+        [Parameter()]
+        [hashtable]$Sync
+    )
+
+    $byUserByChat = [System.Collections.Generic.Dictionary[string, System.Collections.Generic.Dictionary[string, System.Collections.Generic.List[string]]]]::new([System.StringComparer]::Ordinal)
+    $errors = [System.Collections.Generic.Dictionary[string, string]]::new([System.StringComparer]::Ordinal)
+    $requests = [System.Collections.Generic.List[hashtable]]::new()
+    $chatOfRequest = [System.Collections.Generic.Dictionary[string, string]]::new([System.StringComparer]::Ordinal)
+    foreach ($pair in $MessageIdsByChat.GetEnumerator()) {
+        $byUserByChat[$pair.Key] = [System.Collections.Generic.Dictionary[string, System.Collections.Generic.List[string]]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        foreach ($messageId in $pair.Value) {
+            $id = [string]$requests.Count
+            $requests.Add(@{ Id = $id; Path = ('/chats/{0}/messages/{1}' -f [System.Uri]::EscapeDataString($pair.Key), [System.Uri]::EscapeDataString($messageId)) })
+            $chatOfRequest[$id] = $pair.Key
         }
     }
-    $result = [System.Collections.Generic.Dictionary[string, string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    foreach ($pair in $byUser.GetEnumerator()) { $result[$pair.Key] = [string]::Join(', ', $pair.Value) }
-    return , $result
+
+    if ($requests.Count -gt 0) {
+        $answers = Invoke-TbmGraphBatch -AuthState $AuthState -Requests $requests -Sync $Sync
+        foreach ($request in $requests) {
+            $chatId = $chatOfRequest[$request.Id]
+            $answer = $null
+            if (-not $answers.TryGetValue($request.Id, [ref]$answer) -or $answer.Status -eq 404) { continue }
+            if ($answer.Status -ne 200) {
+                $errors[$chatId] = Get-TbmFailureMessage -Exception (New-TbmBatchItemException -Result $answer -Path $request.Path)
+                continue
+            }
+            $reactions = [TeamsBlastMessenger.TbmObject]::GetValue($answer.Body, 'reactions')
+            if ($null -eq $reactions) { continue }
+            $byUser = $byUserByChat[$chatId]
+            foreach ($reaction in $reactions) {
+                $userId = [string]([TeamsBlastMessenger.TbmObject]::GetValue($reaction, 'user.user.id'))
+                if ([string]::IsNullOrEmpty($userId)) { continue }
+                $name = [string]([TeamsBlastMessenger.TbmObject]::GetValue($reaction, 'displayName'))
+                if ([string]::IsNullOrEmpty($name)) { $name = [string]([TeamsBlastMessenger.TbmObject]::GetValue($reaction, 'reactionType')) }
+                if (-not $byUser.ContainsKey($userId)) { $byUser[$userId] = [System.Collections.Generic.List[string]]::new() }
+                if (-not $byUser[$userId].Contains($name)) { $byUser[$userId].Add($name) }
+            }
+        }
+    }
+
+    $output = [System.Collections.Generic.Dictionary[string, hashtable]]::new([System.StringComparer]::Ordinal)
+    foreach ($pair in $byUserByChat.GetEnumerator()) {
+        $joined = [System.Collections.Generic.Dictionary[string, string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        foreach ($user in $pair.Value.GetEnumerator()) { $joined[$user.Key] = [string]::Join(', ', $user.Value) }
+        $reason = $null
+        $null = $errors.TryGetValue($pair.Key, [ref]$reason)
+        $output[$pair.Key] = @{ Reactions = $joined; Error = $reason }
+    }
+    return , $output
 }
 
 function Get-TbmMyChats {
@@ -412,7 +533,7 @@ function Get-TbmMyChats {
 
     $filtered = [System.Collections.Generic.List[object]]::new()
     foreach ($chat in $chats) {
-        if ([string](Get-TbmPropertyValue -InputObject $chat -Name 'chatType') -eq $ChatType) { $filtered.Add($chat) }
+        if ([string]([TeamsBlastMessenger.TbmObject]::GetValue($chat, 'chatType')) -eq $ChatType) { $filtered.Add($chat) }
     }
     return , $filtered
 }
@@ -439,10 +560,10 @@ function Get-TbmOneOnOneChatMap {
 
     $map = [System.Collections.Generic.Dictionary[string, string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     foreach ($chat in (Get-TbmMyChats -AuthState $AuthState -ChatType oneOnOne -Settings $Settings -Sync $Sync)) {
-        $members = Get-TbmPropertyValue -InputObject $chat -Name 'members'
+        $members = [TeamsBlastMessenger.TbmObject]::GetValue($chat, 'members')
         if ($null -eq $members) { continue }
         foreach ($member in $members) {
-            $userId = [string](Get-TbmPropertyValue -InputObject $member -Name 'userId')
+            $userId = [string]([TeamsBlastMessenger.TbmObject]::GetValue($member, 'userId'))
             if ([string]::IsNullOrEmpty($userId) -or [string]::Equals($userId, [string]$AuthState.MeId, [System.StringComparison]::OrdinalIgnoreCase)) { continue }
             if (-not $map.ContainsKey($userId)) { $map[$userId] = [string]$chat.id }
         }
@@ -487,12 +608,12 @@ function Find-TbmGroupChat {
     $bestScore = -1
     foreach ($chat in (Get-TbmMyChats -AuthState $AuthState -ChatType group -Settings $Settings -Sync $Sync)) {
         $memberIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-        $members = Get-TbmPropertyValue -InputObject $chat -Name 'members'
-        if ($null -ne $members) { foreach ($member in $members) { $null = $memberIds.Add([string](Get-TbmPropertyValue -InputObject $member -Name 'userId')) } }
+        $members = [TeamsBlastMessenger.TbmObject]::GetValue($chat, 'members')
+        if ($null -ne $members) { foreach ($member in $members) { $null = $memberIds.Add([string]([TeamsBlastMessenger.TbmObject]::GetValue($member, 'userId'))) } }
         if (-not $memberIds.SetEquals($expected)) { continue }
 
         $score = 1
-        $topic = [string](Get-TbmPropertyValue -InputObject $chat -Name 'topic')
+        $topic = [string]([TeamsBlastMessenger.TbmObject]::GetValue($chat, 'topic'))
         if (-not [string]::IsNullOrWhiteSpace($Blast.Topic) -and [string]::Equals($topic.Trim(), $Blast.Topic.Trim(), [System.StringComparison]::OrdinalIgnoreCase)) { $score = 2 }
         if ($score -gt $bestScore) { $bestScore = $score; $bestId = [string]$chat.id }
     }

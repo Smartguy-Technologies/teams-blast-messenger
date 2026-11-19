@@ -49,7 +49,7 @@
                 </Grid.RowDefinitions>
                 <TextBlock Grid.ColumnSpan="2" Text="Sending" Style="{StaticResource CardTitle}"/>
                 <TextBlock Grid.Row="1" Text="Delay between messages (ms)" VerticalAlignment="Center"/>
-                <TextBox Grid.Row="1" Grid.Column="1" Name="TxtPacing" Width="100" HorizontalAlignment="Left" Margin="0,3"/>
+                <TextBox Grid.Row="1" Grid.Column="1" Name="TxtPacing" Width="100" HorizontalAlignment="Left" Margin="0,3" ToolTip="Graph: minimum time from the start of one send to the next. Deep links: pause after each message (at least 1500 ms)."/>
                 <TextBlock Grid.Row="2" Text="Test recipient" VerticalAlignment="Center"/>
                 <TextBox Grid.Row="2" Grid.Column="1" Name="TxtTestRecipient" Margin="0,3" ToolTip="Leave blank to send tests to yourself (requires Graph)"/>
                 <TextBlock Grid.Row="3" Text="Deep links open in" VerticalAlignment="Center"/>

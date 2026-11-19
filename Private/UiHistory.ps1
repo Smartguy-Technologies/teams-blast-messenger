@@ -33,7 +33,7 @@ function Show-TbmHistoryWindow {
     $c = $ui.Controls
     $c.GridBlasts.Add_SelectionChanged({
             Invoke-TbmUiAction -Name 'Select blast' -Action {
-                $blast = $historyView.Ui.Controls.GridBlasts.SelectedItem -as [TeamsBlastMessenger.TbmBlastRecord]
+                $blast = Get-TbmSelectedHistoryBlast -View $historyView
                 $historyView.Ui.Controls.GridRecipients.ItemsSource = $null
                 if ($null -ne $blast) { $historyView.Ui.Controls.GridRecipients.ItemsSource = $blast.Recipients }
                 $historyView.Ui.Controls.TxtMessage.Text = ''
@@ -42,7 +42,7 @@ function Show-TbmHistoryWindow {
         })
     $c.GridRecipients.Add_SelectionChanged({
             Invoke-TbmUiAction -Name 'Select recipient' -Action {
-                $blast = $historyView.Ui.Controls.GridBlasts.SelectedItem -as [TeamsBlastMessenger.TbmBlastRecord]
+                $blast = Get-TbmSelectedHistoryBlast -View $historyView
                 $recipient = $historyView.Ui.Controls.GridRecipients.SelectedItem -as [TeamsBlastMessenger.TbmRecipientResult]
                 if ($null -eq $blast -or $null -eq $recipient) { return }
                 $format = 'Text'
@@ -54,7 +54,7 @@ function Show-TbmHistoryWindow {
     $c.BtnOpenFolder.Add_Click({ Invoke-TbmUiAction -Name 'Open history folder' -Action { Open-TbmFolder -Path (Get-TbmAppDataPath -Name 'History') } })
     $c.BtnInteractions.Add_Click({
             Invoke-TbmUiAction -Name 'Check interactions' -Action {
-                $blast = $historyView.Ui.Controls.GridBlasts.SelectedItem -as [TeamsBlastMessenger.TbmBlastRecord]
+                $blast = Get-TbmSelectedHistoryBlast -View $historyView
                 if ($null -eq $blast) { return }
                 Open-TbmInteractions -Blast $blast -Owner $historyView.Ui.Window
                 $historyView.Ui.Controls.GridBlasts.Items.Refresh()
@@ -62,7 +62,7 @@ function Show-TbmHistoryWindow {
         })
     $c.BtnRetry.Add_Click({
             Invoke-TbmUiAction -Name 'Retry failed' -Action {
-                $blast = $historyView.Ui.Controls.GridBlasts.SelectedItem -as [TeamsBlastMessenger.TbmBlastRecord]
+                $blast = Get-TbmSelectedHistoryBlast -View $historyView
                 if ($null -eq $blast) { return }
                 if ((Get-TbmRetryableRecipients -Blast $blast).Count -eq 0) {
                     $null = Show-TbmMessageBox -Text 'Every recipient in this blast was sent or skipped; there is nothing to retry.' -Owner $historyView.Ui.Window
@@ -74,7 +74,7 @@ function Show-TbmHistoryWindow {
         })
     $c.BtnReuse.Add_Click({
             Invoke-TbmUiAction -Name 'Reuse message' -Action {
-                $blast = $historyView.Ui.Controls.GridBlasts.SelectedItem -as [TeamsBlastMessenger.TbmBlastRecord]
+                $blast = Get-TbmSelectedHistoryBlast -View $historyView
                 if ($null -eq $blast) { return }
                 $historyView.Result = @{ Action = 'Reuse'; Blast = $blast }
                 $historyView.Ui.Window.Close()
@@ -82,7 +82,7 @@ function Show-TbmHistoryWindow {
         })
     $c.BtnExport.Add_Click({
             Invoke-TbmUiAction -Name 'Export history' -Action {
-                $blast = $historyView.Ui.Controls.GridBlasts.SelectedItem -as [TeamsBlastMessenger.TbmBlastRecord]
+                $blast = Get-TbmSelectedHistoryBlast -View $historyView
                 if ($null -eq $blast) { return }
                 $name = 'Blast_{0}.csv' -f $blast.CreatedUtc.ToLocalTime().ToString('yyyyMMdd-HHmmss', [System.Globalization.CultureInfo]::InvariantCulture)
                 $path = Show-TbmSaveFileDialog -FileName $name -Owner $historyView.Ui.Window
@@ -91,7 +91,7 @@ function Show-TbmHistoryWindow {
         })
     $c.BtnDelete.Add_Click({
             Invoke-TbmUiAction -Name 'Delete history' -Action {
-                $blast = $historyView.Ui.Controls.GridBlasts.SelectedItem -as [TeamsBlastMessenger.TbmBlastRecord]
+                $blast = Get-TbmSelectedHistoryBlast -View $historyView
                 if ($null -eq $blast) { return }
                 if (-not (Confirm-TbmAction -Text ('Delete the history record for the blast sent {0} to {1} recipient(s)? Messages already sent in Teams are not affected.' -f $blast.CreatedLocal, $blast.RecipientCount) -Icon ([System.Windows.MessageBoxImage]::Warning))) { return }
                 Remove-TbmBlastRecord -Blast $blast -Confirm:$false
@@ -102,6 +102,23 @@ function Show-TbmHistoryWindow {
     $ui.Window.Add_Loaded({ Invoke-TbmUiAction -Name 'Load history' -Action { & $historyView.Refresh } })
     $null = $ui.Window.ShowDialog()
     return $historyView.Result
+}
+
+function Get-TbmSelectedHistoryBlast {
+    <#
+    .SYNOPSIS
+        The selected blast, fully loaded (the list is built from summaries).
+    #>
+    [CmdletBinding()]
+    [OutputType([TeamsBlastMessenger.TbmBlastRecord])]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNull()]
+        [hashtable]$View
+    )
+    $blast = $View.Ui.Controls.GridBlasts.SelectedItem -as [TeamsBlastMessenger.TbmBlastRecord]
+    if ($null -eq $blast) { return $null }
+    return Expand-TbmBlastRecord -Blast $blast
 }
 
 function Update-TbmHistoryButtons {

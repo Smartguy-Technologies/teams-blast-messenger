@@ -22,7 +22,13 @@ foreach ($assemblyName in @('System.Net.Http', 'System.IO.Compression', 'System.
 if ($null -eq ('TeamsBlastMessenger.TbmLogger' -as [type])) {
     $typeSourcePath = [System.IO.Path]::Combine($PSScriptRoot, 'Types', 'TbmTypes.cs')
     $typeSource     = [System.IO.File]::ReadAllText($typeSourcePath)
-    Add-Type -TypeDefinition $typeSource -Language CSharp -ErrorAction Stop
+    $addTypeParameters = @{ TypeDefinition = $typeSource; Language = 'CSharp'; ErrorAction = 'Stop' }
+    if ($PSVersionTable.PSEdition -ne 'Core') {
+        # Windows PowerShell compiles against System.dll only; name the other assemblies the types use.
+        # (PowerShell 7 already references the whole framework, and naming them again would conflict.)
+        $addTypeParameters['ReferencedAssemblies'] = @('System.Xml', [System.Management.Automation.PSObject].Assembly.Location)
+    }
+    Add-Type @addTypeParameters
 }
 
 foreach ($folderName in @('Private', 'Public')) {

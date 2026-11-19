@@ -96,6 +96,43 @@ function Write-TbmLog {
 
 #endregion
 
+#region Module discovery
+
+$script:TbmModuleCache = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::OrdinalIgnoreCase)
+
+function Get-TbmAvailableModule {
+    <#
+    .SYNOPSIS
+        Get-Module -ListAvailable for one module name, cached for the session.
+    .DESCRIPTION
+        Listing available modules scans every folder on PSModulePath, which can take seconds. A module that
+        was found is cached for the session; a missing one is re-checked after two minutes, so installing it
+        while the app is open is noticed.
+    .OUTPUTS
+        PSModuleInfo[] (empty when the module is not installed), newest version first.
+    #>
+    [CmdletBinding()]
+    [OutputType([System.Management.Automation.PSModuleInfo[]])]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Name
+    )
+
+    $cached = $null
+    if ($script:TbmModuleCache.TryGetValue($Name, [ref]$cached)) {
+        if ($cached.Modules.Length -gt 0 -or ([datetime]::UtcNow - $cached.CheckedUtc).TotalMinutes -lt 2) { return , $cached.Modules }
+    }
+    $found = [System.Collections.Generic.List[System.Management.Automation.PSModuleInfo]]::new()
+    foreach ($module in (Get-Module -ListAvailable -Name $Name)) { $found.Add($module) }
+    $found.Sort([TeamsBlastMessenger.TbmModuleByVersionDesc]::new())
+    $modules = $found.ToArray()
+    $script:TbmModuleCache[$Name] = @{ Modules = $modules; CheckedUtc = [datetime]::UtcNow }
+    return , $modules
+}
+
+#endregion
+
 #region Settings and organization policy
 <#
     Effective settings are layered, lowest to highest precedence:
@@ -590,16 +627,7 @@ function ConvertTo-TbmUtcDateTime {
         [object]$Value
     )
 
-    if ($null -eq $Value) { return $null }
-    if ($Value -is [datetime]) {
-        if ($Value.Kind -eq [System.DateTimeKind]::Unspecified) { return [datetime]::SpecifyKind($Value, [System.DateTimeKind]::Utc) }
-        return $Value.ToUniversalTime()
-    }
-    if ($Value -is [System.DateTimeOffset]) { return $Value.UtcDateTime }
-    $text = [string]$Value
-    if ([string]::IsNullOrWhiteSpace($text)) { return $null }
-    $styles = [System.Globalization.DateTimeStyles]::AssumeUniversal -bor [System.Globalization.DateTimeStyles]::AdjustToUniversal
-    return [System.DateTimeOffset]::Parse($text, [System.Globalization.CultureInfo]::InvariantCulture, $styles).UtcDateTime
+    return [TeamsBlastMessenger.TbmObject]::ToUtc($Value)
 }
 
 function ConvertTo-TbmIsoString {
@@ -636,19 +664,7 @@ function Get-TbmPropertyValue {
         [string]$Name
     )
 
-    $current = $InputObject
-    foreach ($part in $Name.Split('.')) {
-        if ($null -eq $current) { return $null }
-        if ($current -is [System.Collections.IDictionary]) {
-            if (-not $current.Contains($part)) { return $null }
-            $current = $current[$part]
-            continue
-        }
-        $property = $current.PSObject.Properties[$part]
-        if ($null -eq $property) { return $null }
-        $current = $property.Value
-    }
-    return $current
+    return [TeamsBlastMessenger.TbmObject]::GetValue($InputObject, $Name)
 }
 
 function Test-TbmIsWindows {

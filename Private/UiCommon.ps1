@@ -362,8 +362,8 @@ function Show-TbmSettingsWindow {
     }
 
     $sdkText = 'Graph SDK module: not installed (Install-Module Microsoft.Graph.Authentication -Scope CurrentUser).'
-    $sdkModules = Get-Module -ListAvailable -Name 'Microsoft.Graph.Authentication'
-    if ($null -ne $sdkModules -and @($sdkModules).Count -gt 0) { $sdkText = 'Graph SDK module: installed (v{0}).' -f @($sdkModules)[0].Version }
+    $sdkModules = Get-TbmAvailableModule -Name 'Microsoft.Graph.Authentication'
+    if ($sdkModules.Length -gt 0) { $sdkText = 'Graph SDK module: installed (v{0}).' -f $sdkModules[0].Version }
     $c.TxtGraphInfo.Text = $sdkText + "`nApp registration: public client, 'Allow public client flows' = Yes, delegated permissions " + [string]::Join(', ', $script:TbmGraphScopes) + '.'
     $c.TxtAppData.Text = 'Logs, history and settings are stored in ' + (Get-TbmAppDataPath -Name 'Root')
 

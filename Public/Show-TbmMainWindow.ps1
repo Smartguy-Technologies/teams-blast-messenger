@@ -43,6 +43,9 @@
         Progress        = @{ Done = 0; Sent = 0; Failed = 0; Total = 0 }
         LogLines        = [System.Collections.Generic.Queue[string]]::new()
         Timer           = $null
+        PreviewTimer    = $null
+        TokenColumns    = $null
+        TokenColumnsKey = $null
     }
 
     Register-TbmMainWindowEvents
@@ -54,6 +57,7 @@
     }
     finally {
         $script:TbmUi.Timer.Stop()
+        if ($null -ne $script:TbmUi.PreviewTimer) { $script:TbmUi.PreviewTimer.Stop() }
         Write-TbmLog -Level Info -Source 'App' -Message 'Teams Blast Messenger closed.'
     }
 }

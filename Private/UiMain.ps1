@@ -104,7 +104,15 @@ function Register-TbmMainWindowEvents {
     $c.RadGroup.Add_Checked($groupToggled)
     $c.RadIndividual.Add_Checked($groupToggled)
     $c.CmbFormat.Add_SelectionChanged({ Invoke-TbmUiAction -Name 'Change format' -Action { Update-TbmPreview } })
-    $c.TxtMessage.Add_TextChanged({ Invoke-TbmUiAction -Name 'Preview' -Action { Update-TbmPreview } })
+    # Typing restarts a short timer; the preview is rebuilt once typing pauses instead of on every keystroke.
+    $script:TbmUi.PreviewTimer = New-TbmDispatcherTimer -IntervalMilliseconds 250 -OnTick {
+        $script:TbmUi.PreviewTimer.Stop()
+        Invoke-TbmUiAction -Name 'Preview' -Action { Update-TbmPreview }
+    }
+    $c.TxtMessage.Add_TextChanged({
+            $script:TbmUi.PreviewTimer.Stop()
+            $script:TbmUi.PreviewTimer.Start()
+        })
     $c.LstTokens.Add_MouseDoubleClick({ Invoke-TbmUiAction -Name 'Insert token' -Action { Add-TbmTokenAtCaret } })
 
     $c.BtnPreviewAll.Add_Click({ Invoke-TbmUiAction -Name 'Dry run' -Action { Invoke-TbmDryRun } })
@@ -526,7 +534,7 @@ function Get-TbmIncludedRows {
     foreach ($row in $ui.Table.Rows) {
         if ($row.HasVersion([System.Data.DataRowVersion]::Proposed)) { $row.EndEdit() }
         if (-not [bool]$row[$script:TbmIncludeColumn]) { continue }
-        if (-not (Test-TbmEmailAddress -Value ([string]$row[$ui.RecipientColumn]))) { continue }
+        if (-not [TeamsBlastMessenger.TbmText]::IsEmailAddress([string]$row[$ui.RecipientColumn])) { continue }
         $rows.Add($row)
     }
     return , $rows
@@ -588,7 +596,22 @@ function New-TbmUiTokenContext {
     [CmdletBinding()]
     [OutputType([hashtable])]
     param()
-    return New-TbmTokenContext -ColumnNames $script:TbmUi.ColumnNames -BuiltIns (Get-TbmBuiltInTokenValues -AuthState $script:TbmUi.AuthState)
+    # The column map only changes with the column list, so it is built once per list. Built-in values
+    # (date, time, sender) are always fresh, so a cached context can never send stale values.
+    $ui = $script:TbmUi
+    $columnNames = [string[]]$ui.ColumnNames
+    if ($null -eq $columnNames) { $columnNames = [string[]]@() }
+    $key = [string]::Join([string][char]31, $columnNames)
+    if ($null -eq $ui.TokenColumns -or -not [string]::Equals($ui.TokenColumnsKey, $key, [System.StringComparison]::Ordinal)) {
+        $ui.TokenColumns = New-TbmTokenContext -ColumnNames $columnNames
+        $ui.TokenColumnsKey = $key
+    }
+    $builtIns = New-TbmTokenContext -ColumnNames ([string[]]@()) -BuiltIns (Get-TbmBuiltInTokenValues -AuthState $ui.AuthState)
+    return @{
+        Columns    = $ui.TokenColumns.Columns
+        BuiltIns   = $builtIns.BuiltIns
+        Collisions = $ui.TokenColumns.Collisions
+    }
 }
 
 function Update-TbmPreview {
@@ -1151,14 +1174,23 @@ function Update-TbmLogPane {
     $entries = [TeamsBlastMessenger.TbmLogger]::DrainPending()
     if ($entries.Count -eq 0) { return }
     $ui = $script:TbmUi
+    $added = [System.Text.StringBuilder]::new()
     foreach ($entry in $entries) {
         $line = $entry.ToDisplayLine()
         $newline = $line.IndexOf("`n")
         if ($newline -gt 0) { $line = $line.Substring(0, $newline).TrimEnd() + ' (details in log file)' }
+        if ($ui.LogLines.Count -gt 0 -or $added.Length -gt 0) { $null = $added.Append([System.Environment]::NewLine) }
+        $null = $added.Append($line)
         $ui.LogLines.Enqueue($line)
     }
-    while ($ui.LogLines.Count -gt 800) { $null = $ui.LogLines.Dequeue() }
-    $ui.C.TxtLog.Text = [string]::Join([System.Environment]::NewLine, $ui.LogLines.ToArray())
+    if ($ui.LogLines.Count -gt 1000) {
+        # Trim occasionally (back to 800 lines) instead of rewriting the whole pane on every update.
+        while ($ui.LogLines.Count -gt 800) { $null = $ui.LogLines.Dequeue() }
+        $ui.C.TxtLog.Text = [string]::Join([System.Environment]::NewLine, $ui.LogLines.ToArray())
+    }
+    else {
+        $ui.C.TxtLog.AppendText($added.ToString())
+    }
     $ui.C.TxtLog.ScrollToEnd()
 }
 
@@ -1231,7 +1263,7 @@ function Open-TbmLatestInteractions {
     $blast = $ui.LastBlast
     if ($null -eq $blast) {
         foreach ($record in (Get-TbmBlastHistory)) {
-            if (-not $record.IsTest -and $record.SentCount -gt 0) { $blast = $record; break }
+            if (-not $record.IsTest -and $record.SentCount -gt 0) { $blast = Expand-TbmBlastRecord -Blast $record; break }
         }
     }
     if ($null -eq $blast) {

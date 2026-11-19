@@ -295,12 +295,16 @@ function Invoke-TbmIndividualSend {
     $sync = $Job.Sync
     $userCache = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $pacing = [int]$Job.Settings.PacingDelayMs
-    if ($Job.Blast.Transport -like 'DeepLink*') { $pacing = [System.Math]::Max($pacing, 1500) }
+    $isDeepLink = $Job.Blast.Transport -like 'DeepLink*'
+    if ($isDeepLink) { $pacing = [System.Math]::Max($pacing, 1500) }
+    else { Resolve-TbmJobUsers -Job $Job -Cache $userCache }
 
     $position = 0
+    $clock = [System.Diagnostics.Stopwatch]::new()
     foreach ($item in $Job.Items) {
         $position++
         if ([bool]$sync['Cancel']) { break }
+        $clock.Restart()
         try {
             Send-TbmBlastItem -Job $Job -Indexes @([int]$item.Index) -Message ([string]$item.Message) -UserCache $userCache
             Set-TbmRecipientOutcome -Job $Job -Index $item.Index -Status Sent
@@ -313,7 +317,44 @@ function Invoke-TbmIndividualSend {
             Write-TbmLog -Source 'Send' -Message ('Send to {0} failed.' -f $item.Email) -ErrorRecord $_
             Set-TbmRecipientOutcome -Job $Job -Index $item.Index -Status Failed -ErrorMessage (Get-TbmFailureMessage -Exception $_.Exception)
         }
-        if ($position -lt $Job.Items.Count -and -not (Wait-TbmDelay -Milliseconds $pacing -Sync $sync)) { break }
+        if ($position -ge $Job.Items.Count) { continue }
+        # Graph: PacingDelayMs is the minimum time between the starts of two sends, so request time counts toward it.
+        # Deep links: the full pause always follows, so Teams finishes sending before the next chat opens.
+        $wait = $pacing
+        if (-not $isDeepLink) { $wait = [int][System.Math]::Max(0, $pacing - $clock.ElapsedMilliseconds) }
+        if (-not (Wait-TbmDelay -Milliseconds $wait -Sync $sync)) { break }
+    }
+}
+
+function Resolve-TbmJobUsers {
+    <#
+    .SYNOPSIS
+        Pre-resolves every recipient of a Graph job that has no user id yet, in batches, into the job's user cache.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNull()]
+        [hashtable]$Job,
+
+        [Parameter(Mandatory)]
+        [ValidateNotNull()]
+        [System.Collections.Generic.Dictionary[string, object]]$Cache
+    )
+
+    $blast = [TeamsBlastMessenger.TbmBlastRecord]$Job.Blast
+    $emails = [System.Collections.Generic.List[string]]::new()
+    foreach ($item in $Job.Items) {
+        $recipient = $blast.Recipients[[int]$item.Index]
+        if ([string]::IsNullOrEmpty($recipient.UserId)) { $emails.Add($recipient.Email) }
+    }
+    if ($emails.Count -lt 2) { return }
+    try {
+        Resolve-TbmGraphUsers -AuthState $Job.AuthState -Emails $emails.ToArray() -Cache $Cache -Sync $Job.Sync
+    }
+    catch [System.OperationCanceledException] {
+        # The send loop sees the cancel flag next and the worker marks the rest Cancelled.
+        Write-TbmLog -Level Info -Source 'Send' -Message 'Cancelled during user lookup.'
     }
 }
 
@@ -328,6 +369,7 @@ function Invoke-TbmGroupSend {
     $blast = [TeamsBlastMessenger.TbmBlastRecord]$Job.Blast
     $userCache = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $indexes = [System.Collections.Generic.List[int]]::new()
+    if ($blast.Transport -like 'Graph*') { Resolve-TbmJobUsers -Job $Job -Cache $userCache }
 
     # Resolve members first so one unknown address does not block the whole group.
     foreach ($item in $Job.Items) {

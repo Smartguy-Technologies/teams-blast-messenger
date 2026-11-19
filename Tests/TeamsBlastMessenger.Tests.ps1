@@ -439,6 +439,136 @@ Describe 'Graph client' {
     }
 }
 
+Describe 'Graph batching' {
+    It 'sends up to 20 requests per batch call and retries only throttled items after Retry-After' {
+        InModuleScope TeamsBlastMessenger {
+            $script:batchCalls = [System.Collections.Generic.List[object]]::new()
+            Mock Wait-TbmDelay { $true }
+            Mock Invoke-TbmGraphRequest {
+                $Path | Should -Be '/$batch'
+                $script:batchCalls.Add($Body.requests)
+                $responses = [System.Collections.Generic.List[object]]::new()
+                foreach ($entry in $Body.requests) {
+                    $status = 200
+                    if ($entry.id -eq '1') { $status = 404 }
+                    if ($entry.id -eq '2' -and $script:batchCalls.Count -eq 1) { $status = 429 }
+                    $responses.Add([pscustomobject]@{ id = $entry.id; status = $status; headers = [pscustomobject]@{ 'Retry-After' = '3' }; body = [pscustomobject]@{ url = $entry.url } })
+                }
+                return [pscustomobject]@{ responses = $responses.ToArray() }
+            }
+            $requests = [System.Collections.Generic.List[hashtable]]::new()
+            for ($i = 0; $i -lt 25; $i++) { $requests.Add(@{ Id = [string]$i; Path = ('https://graph.microsoft.com/v1.0/users/u{0}?$filter=a eq b' -f $i) }) }
+
+            $answers = Invoke-TbmGraphBatch -AuthState (New-TbmAuthState) -Requests $requests
+
+            $answers.Count | Should -Be 25
+            $script:batchCalls.Count | Should -Be 3
+            $script:batchCalls[0].Count | Should -Be 20
+            $script:batchCalls[1].Count | Should -Be 5
+            $script:batchCalls[2].Count | Should -Be 1
+            $script:batchCalls[2][0].id | Should -Be '2'
+            $script:batchCalls[0][0].url | Should -Be '/users/u0?$filter=a%20eq%20b'
+            $answers['1'].Status | Should -Be 404
+            $answers['2'].Status | Should -Be 200
+            Should -Invoke Wait-TbmDelay -Times 1 -Exactly -ParameterFilter { $Milliseconds -eq 3000 }
+        }
+    }
+
+    It 'resolves users in bulk: UPN first, then mail, caching misses and leaving errors to the per-user path' {
+        InModuleScope TeamsBlastMessenger {
+            Mock Invoke-TbmGraphBatch {
+                $answers = [System.Collections.Generic.Dictionary[string, object]]::new()
+                foreach ($request in $Requests) {
+                    $status = 200; $body = $null
+                    switch -Regex ($request.Path) {
+                        '^/users/a%40x\.com' { $body = [pscustomobject]@{ id = 'ua'; displayName = 'Ada'; userPrincipalName = 'a@x.com'; mail = 'a@x.com' } }
+                        '^/users/(b|n)%40x\.com' { $status = 404 }
+                        '^/users/c%40x\.com' { $status = 500; $body = [pscustomobject]@{ error = [pscustomobject]@{ code = 'boom'; message = 'Server error' } } }
+                        'mail%20eq%20%27b%40x\.com%27' { $body = [pscustomobject]@{ value = @([pscustomobject]@{ id = 'ub'; displayName = 'Bo'; userPrincipalName = 'bo@corp'; mail = 'b@x.com' }) } }
+                        'mail%20eq%20%27n%40x\.com%27' { $body = [pscustomobject]@{ value = @() } }
+                    }
+                    $answers[$request.Id] = [pscustomobject]@{ Id = $request.Id; Status = $status; Body = $body; Headers = $null }
+                }
+                return , $answers
+            }
+            $cache = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::OrdinalIgnoreCase)
+            Resolve-TbmGraphUsers -AuthState (New-TbmAuthState) -Emails @('A@x.com', 'a@x.com ', 'b@x.com', 'c@x.com', 'n@x.com', '') -Cache $cache
+
+            Should -Invoke Invoke-TbmGraphBatch -Times 2 -Exactly
+            Should -Invoke Invoke-TbmGraphBatch -Times 1 -Exactly -ParameterFilter { $Requests.Count -eq 4 }
+            $cache['a@x.com'].Id | Should -Be 'ua'
+            $cache['b@x.com'].Id | Should -Be 'ub'
+            $cache.ContainsKey('n@x.com') | Should -BeTrue
+            $cache['n@x.com'] | Should -BeNullOrEmpty
+            $cache.ContainsKey('c@x.com') | Should -BeFalse
+        }
+    }
+
+    It 'counts Graph request time toward the pacing delay, but always pauses fully between deep links' {
+        InModuleScope TeamsBlastMessenger {
+            Mock Resolve-TbmGraphUsers { }
+            Mock Send-TbmBlastItem { [System.Threading.Thread]::Sleep(300) }
+            Mock Set-TbmRecipientOutcome { }
+            Mock Wait-TbmDelay { $true }
+            $items = [System.Collections.Generic.List[hashtable]]::new()
+            $blast = [TeamsBlastMessenger.TbmBlastRecord]::new()
+            foreach ($email in @('a@x.com', 'b@x.com')) {
+                $recipient = [TeamsBlastMessenger.TbmRecipientResult]::new(); $recipient.Email = $email; $blast.Recipients.Add($recipient)
+                $items.Add(@{ Index = $blast.Recipients.Count - 1; Email = $email; Message = 'x' })
+            }
+
+            $blast.Transport = 'GraphRest'
+            Invoke-TbmIndividualSend -Job @{ Blast = $blast; Items = $items; Settings = @{ PacingDelayMs = 1000 }; AuthState = (New-TbmAuthState); Sync = (New-TbmSyncState) }
+            Should -Invoke Wait-TbmDelay -Times 1 -Exactly -ParameterFilter { $Milliseconds -ge 0 -and $Milliseconds -le 750 }
+
+            $blast.Transport = 'DeepLinkAuto'
+            Invoke-TbmIndividualSend -Job @{ Blast = $blast; Items = $items; Settings = @{ PacingDelayMs = 1000 }; AuthState = (New-TbmAuthState); Sync = (New-TbmSyncState) }
+            Should -Invoke Wait-TbmDelay -Times 1 -Exactly -ParameterFilter { $Milliseconds -eq 1500 }
+        }
+    }
+
+    It 'probes the server-side message filter once, then pages newest-first for every chat after a 400' {
+        InModuleScope TeamsBlastMessenger {
+            $script:filteredRequests = 0
+            $script:roundSizes = [System.Collections.Generic.List[int]]::new()
+            Mock Invoke-TbmGraphBatch {
+                $script:roundSizes.Add($Requests.Count)
+                $answers = [System.Collections.Generic.Dictionary[string, object]]::new()
+                foreach ($request in $Requests) {
+                    if ($request.Path.Contains('$filter')) {
+                        $script:filteredRequests++
+                        $answers[$request.Id] = [pscustomobject]@{ Id = $request.Id; Status = 400; Body = $null; Headers = $null }
+                        continue
+                    }
+                    if ($request.Path.StartsWith('/chats/c3/')) {
+                        $answers[$request.Id] = [pscustomobject]@{ Id = $request.Id; Status = 403; Body = [pscustomobject]@{ error = [pscustomobject]@{ code = 'Forbidden'; message = 'No access' } }; Headers = $null }
+                        continue
+                    }
+                    $value = @(
+                        [pscustomobject]@{ id = 'new'; createdDateTime = '2026-11-17T10:00:00Z' },
+                        [pscustomobject]@{ id = 'old'; createdDateTime = '2026-11-17T08:00:00Z' }
+                    )
+                    $answers[$request.Id] = [pscustomobject]@{ Id = $request.Id; Status = 200; Body = [pscustomobject]@{ value = $value; '@odata.nextLink' = 'https://graph.microsoft.com/v1.0/next' }; Headers = $null }
+                }
+                return , $answers
+            }
+            $since = [datetime]::new(2026, 11, 17, 9, 0, 0, [System.DateTimeKind]::Utc)
+            $chats = [System.Collections.Generic.List[hashtable]]::new()
+            foreach ($id in @('c1', 'c2', 'c3')) { $chats.Add(@{ ChatId = $id; SinceUtc = $since }) }
+
+            $read = Get-TbmChatMessagesBatch -AuthState (New-TbmAuthState) -Chats $chats
+
+            $script:filteredRequests | Should -Be 1
+            $script:roundSizes[0] | Should -Be 1
+            $read['c1'].Messages.Count | Should -Be 1
+            $read['c1'].Messages[0].id | Should -Be 'new'
+            $read['c2'].Messages.Count | Should -Be 1
+            $read['c1'].Error | Should -BeNullOrEmpty
+            $read['c3'].Error | Should -Match 'Forbidden'
+        }
+    }
+}
+
 Describe 'Send worker' {
     It 'sends individually, records chat/message ids and reports per-recipient failures' {
         InModuleScope TeamsBlastMessenger {
@@ -446,6 +576,7 @@ Describe 'Send worker' {
                 if ($Email -eq 'ghost@x.com') { return $null }
                 [pscustomobject]@{ Id = 'id-' + $Email; DisplayName = 'Name ' + $Email; Upn = $Email; Mail = $Email }
             }
+            Mock Resolve-TbmGraphUsers { }
             Mock New-TbmGraphChat { 'chat-' + $MemberUserIds[0] }
             Mock Send-TbmGraphChatMessage { [pscustomobject]@{ Id = 'msg-' + $ChatId; CreatedUtc = [datetime]::new(2026, 11, 17, 10, 0, 0, [System.DateTimeKind]::Utc) } }
 
@@ -484,6 +615,7 @@ Describe 'Send worker' {
     It 'sends one group message to all resolvable members and cancels cleanly' {
         InModuleScope TeamsBlastMessenger {
             Mock Resolve-TbmGraphUser { [pscustomobject]@{ Id = 'id-' + $Email; DisplayName = $Email; Upn = $Email; Mail = $Email } }
+            Mock Resolve-TbmGraphUsers { }
             Mock New-TbmGraphChat { 'group-chat' }
             Mock Send-TbmGraphChatMessage { [pscustomobject]@{ Id = 'm1'; CreatedUtc = [datetime]::UtcNow } }
             $blast = [TeamsBlastMessenger.TbmBlastRecord]::new()
@@ -578,14 +710,18 @@ Describe 'Interaction tracking' {
             Mock Resolve-TbmGraphUser { [pscustomobject]@{ Id = 'ua'; DisplayName = 'Ada'; Upn = $Email; Mail = $Email } }
             Mock Invoke-TbmGraphPagedRequest {
                 $list = [System.Collections.Generic.List[object]]::new()
-                if ($Path.StartsWith('/me/chats')) {
-                    $list.Add([pscustomobject]@{ id = 'chat-ua'; chatType = 'oneOnOne'; members = @([pscustomobject]@{ userId = 'me' }, [pscustomobject]@{ userId = 'ua' }) })
-                }
-                else {
-                    $Path | Should -Match 'lastModifiedDateTime gt 2026-11-17T09:00:00.000Z'
-                    $list.Add((New-TestMessage -Id 'r1' -From 'ua' -Created '2026-11-17T09:01:00.000Z' -Html 'On it'))
-                }
+                $Path | Should -Match '^/me/chats'
+                $list.Add([pscustomobject]@{ id = 'chat-ua'; chatType = 'oneOnOne'; members = @([pscustomobject]@{ userId = 'me' }, [pscustomobject]@{ userId = 'ua' }) })
                 return , $list
+            }
+            Mock Invoke-TbmGraphBatch {
+                $answers = [System.Collections.Generic.Dictionary[string, object]]::new()
+                foreach ($request in $Requests) {
+                    $request.Path | Should -Match '^/chats/chat-ua/messages\?.*lastModifiedDateTime gt 2026-11-17T09:00:00.000Z'
+                    $body = [pscustomobject]@{ value = @((New-TestMessage -Id 'r1' -From 'ua' -Created '2026-11-17T09:01:00.000Z' -Html 'On it')) }
+                    $answers[$request.Id] = [pscustomobject]@{ Id = $request.Id; Status = 200; Body = $body; Headers = $null }
+                }
+                return , $answers
             }
             Mock Invoke-TbmGraphRequest { $null }
             Mock Save-TbmBlastRecord { }
@@ -652,6 +788,129 @@ Describe 'XAML and UI wiring' {
     }
 }
 
+Describe 'Performance helpers' {
+    It 'lists history from current summaries and falls back to the full record when a summary is stale or missing' {
+        InModuleScope TeamsBlastMessenger {
+            $blast = [TeamsBlastMessenger.TbmBlastRecord]::new()
+            $blast.Mode = 'Individual'; $blast.Transport = 'GraphRest'; $blast.Template = 'Summary test'; $blast.Format = 'Text'
+            foreach ($status in @('Sent', 'Sent', 'Failed')) {
+                $recipient = [TeamsBlastMessenger.TbmRecipientResult]::new(); $recipient.Email = 'x@x.com'; $recipient.Status = $status
+                $blast.Recipients.Add($recipient)
+            }
+            Save-TbmBlastRecord -Blast $blast
+            $path = Get-TbmBlastFilePath -Blast $blast
+            [System.IO.File]::Exists($path + '.summary') | Should -BeTrue
+
+            $find = {
+                foreach ($record in (Get-TbmBlastHistory)) { if ($record.Id -eq $blast.Id) { return $record } }
+                return $null
+            }
+            $listed = & $find
+            $listed.IsSummaryOnly | Should -BeTrue
+            $listed.SentCount | Should -Be 2
+            $listed.FailedCount | Should -Be 1
+            $listed.RecipientCount | Should -Be 3
+            $listed.Recipients.Count | Should -Be 0
+            $listed.Template | Should -Be 'Summary test'
+            $null = Expand-TbmBlastRecord -Blast $listed
+            $listed.IsSummaryOnly | Should -BeFalse
+            $listed.Recipients.Count | Should -Be 3
+            $listed.SentCount | Should -Be 2
+
+            # A journal (send in progress or interrupted) always means the full record.
+            $blast.Recipients[2].Status = 'Sent'
+            Add-TbmBlastJournalEntry -Blast $blast -Index 2
+            $listed = & $find
+            $listed.IsSummaryOnly | Should -BeFalse
+            $listed.SentCount | Should -Be 3
+            [System.IO.File]::Delete($path + '.journal')
+
+            # The .json changed after the summary was written: summary ignored.
+            [System.IO.File]::AppendAllText($path, ' ')
+            (& $find).IsSummaryOnly | Should -BeFalse
+
+            # Missing summary (older history): full read, then the summary is backfilled.
+            [System.IO.File]::Delete($path + '.summary')
+            (& $find).IsSummaryOnly | Should -BeFalse
+            [System.IO.File]::Exists($path + '.summary') | Should -BeTrue
+            (& $find).IsSummaryOnly | Should -BeTrue
+
+            Remove-TbmBlastRecord -Blast $blast -Confirm:$false
+            [System.IO.File]::Exists($path + '.summary') | Should -BeFalse
+        }
+    }
+
+    It 'writes validation cells only when they change' {
+        InModuleScope TeamsBlastMessenger {
+            $table = [System.Data.DataTable]::new()
+            $null = $table.Columns.Add('Email', [string])
+            $null = $table.Columns.Add($script:TbmIncludeColumn, [bool])
+            $null = $table.Columns.Add($script:TbmStatusColumn, [string])
+            foreach ($email in @('a@x.com', 'bad', 'A@x.com', 'c@x.com')) { $null = $table.Rows.Add($email, $true, '') }
+            $script:changes = 0
+            $table.add_ColumnChanged({ $script:changes++ })
+
+            $summary = Update-TbmRecipientValidation -Table $table -RecipientColumn 'Email'
+            $summary.Invalid | Should -Be 1
+            $summary.Duplicates | Should -Be 1
+            $script:changes | Should -Be 4
+            $table.Rows[1][$script:TbmStatusColumn] | Should -Be 'Invalid email'
+            $table.Rows[2][$script:TbmIncludeColumn] | Should -BeFalse
+
+            $script:changes = 0
+            $null = Update-TbmRecipientValidation -Table $table -RecipientColumn 'Email'
+            $script:changes | Should -Be 0
+
+            $table.Rows[1]['Email'] = 'b@x.com'
+            $script:changes = 0
+            $null = Update-TbmRecipientValidation -Table $table -RecipientColumn 'Email'
+            $script:changes | Should -Be 2
+            $table.Rows[1][$script:TbmStatusColumn] | Should -Be ''
+            $table.Rows[1][$script:TbmIncludeColumn] | Should -BeTrue
+        }
+    }
+
+    It 'keeps the log file open between entries and survives closing and reopening it' {
+        $marker = [guid]::NewGuid().ToString('N')
+        [TeamsBlastMessenger.TbmLogger]::Info('Test', 'first ' + $marker)
+        [TeamsBlastMessenger.TbmLogger]::Close()
+        [TeamsBlastMessenger.TbmLogger]::Info('Test', 'second ' + $marker)
+        $stream = [System.IO.FileStream]::new([TeamsBlastMessenger.TbmLogger]::CurrentLogPath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+        try { $text = [System.IO.StreamReader]::new($stream).ReadToEnd() } finally { $stream.Dispose() }
+        $text | Should -Match ('first ' + $marker)
+        $text | Should -Match ('second ' + $marker)
+        $null = [TeamsBlastMessenger.TbmLogger]::DrainPending()
+    }
+
+    It 'sorts with the compiled comparers and reads JSON fields and dates without PowerShell calls' {
+        $records = [System.Collections.Generic.List[TeamsBlastMessenger.TbmBlastRecord]]::new()
+        foreach ($day in @(3, 1, 2)) { $record = [TeamsBlastMessenger.TbmBlastRecord]::new(); $record.CreatedUtc = [datetime]::new(2026, 11, $day, 0, 0, 0, [System.DateTimeKind]::Utc); $records.Add($record) }
+        $records.Sort([TeamsBlastMessenger.TbmBlastRecordByCreatedDesc]::new())
+        $records[0].CreatedUtc.Day | Should -Be 3
+        $records[2].CreatedUtc.Day | Should -Be 1
+
+        $replies = [System.Collections.Generic.List[TeamsBlastMessenger.TbmReplyMessage]]::new()
+        foreach ($minute in @(30, 10, 20)) { $reply = [TeamsBlastMessenger.TbmReplyMessage]::new(); $reply.CreatedUtc = [datetime]::new(2026, 11, 17, 9, $minute, 0); $replies.Add($reply) }
+        $replies.Sort([TeamsBlastMessenger.TbmReplyByCreated]::new())
+        $replies[0].CreatedUtc.Minute | Should -Be 10
+
+        $message = ConvertFrom-Json -InputObject '{ "from": { "user": { "id": "u1" } }, "deletedDateTime": null, "attachments": [] }'
+        [TeamsBlastMessenger.TbmObject]::GetValue($message, 'from.user.id') | Should -Be 'u1'
+        [TeamsBlastMessenger.TbmObject]::GetValue($message, 'from.application.id') | Should -BeNullOrEmpty
+        [TeamsBlastMessenger.TbmObject]::GetValue($message, 'deletedDateTime') | Should -BeNullOrEmpty
+        [TeamsBlastMessenger.TbmObject]::GetValue(@{ a = @{ b = 5 } }, 'a.b') | Should -Be 5
+        [TeamsBlastMessenger.TbmObject]::GetValue($null, 'a') | Should -BeNullOrEmpty
+
+        [TeamsBlastMessenger.TbmObject]::ToUtc('2026-11-17T09:30:00+01:00') | Should -Be ([datetime]::new(2026, 11, 17, 8, 30, 0, [System.DateTimeKind]::Utc))
+        ([TeamsBlastMessenger.TbmObject]::ToUtc([datetime]::new(2026, 1, 2, 3, 4, 5))).Kind | Should -Be ([System.DateTimeKind]::Utc)
+        [TeamsBlastMessenger.TbmObject]::ToUtc(' ') | Should -BeNullOrEmpty
+        [TeamsBlastMessenger.TbmText]::IsEmailAddress(' ada@contoso.com ') | Should -BeTrue
+        [TeamsBlastMessenger.TbmText]::IsEmailAddress('Ada <ada@contoso.com>') | Should -BeFalse
+        [TeamsBlastMessenger.TbmText]::IsEmailAddress('ada@localhost') | Should -BeFalse
+        [TeamsBlastMessenger.TbmText]::Truncate('abcdefghij', 6) | Should -Be 'abc...'
+    }
+}
+
 Describe 'Coding standards' {
     BeforeAll {
         $script:SourceFiles = [System.Collections.Generic.List[string]]::new()
@@ -661,6 +920,8 @@ Describe 'Coding standards' {
             if ($file.Contains($skip)) { continue }
             $script:SourceFiles.Add($file)
             $extension = [System.IO.Path]::GetExtension($file).ToLowerInvariant()
+            # Benchmarks.ps1 measures the slow idioms on purpose; it is still checked for ASCII.
+            if ([System.IO.Path]::GetFileName($file) -eq 'Benchmarks.ps1') { continue }
             if ($extension -eq '.ps1' -or $extension -eq '.psm1' -or $extension -eq '.psd1') { $script:ScriptFiles.Add($file) }
         }
 

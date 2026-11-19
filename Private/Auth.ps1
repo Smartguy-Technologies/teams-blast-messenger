@@ -44,8 +44,7 @@ function Test-TbmGraphSdkAvailable {
     [CmdletBinding()]
     [OutputType([bool])]
     param()
-    $modules = Get-Module -ListAvailable -Name 'Microsoft.Graph.Authentication'
-    return $null -ne $modules -and @($modules).Count -gt 0
+    return (Get-TbmAvailableModule -Name 'Microsoft.Graph.Authentication').Length -gt 0
 }
 
 function Resolve-TbmAuthMode {
