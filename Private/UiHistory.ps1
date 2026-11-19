@@ -24,7 +24,7 @@ function Show-TbmHistoryWindow {
         $controls.GridRecipients.ItemsSource = $null
         $controls.TxtMessage.Text = ''
         $messages = 0
-        foreach ($record in $historyView.Records) { $messages += $record.SentCount }
+        foreach ($record in $historyView.Records) { $messages = $messages + $record.SentCount }
         $controls.TxtSummary.Text = '{0} blast(s), {1} recipient message(s) delivered. Stored in {2}' -f $historyView.Records.Count, $messages, (Get-TbmAppDataPath -Name 'History')
         Update-TbmHistoryButtons -View $historyView
     }

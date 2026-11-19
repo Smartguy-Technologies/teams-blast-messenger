@@ -1,81 +1,22 @@
 ﻿#Requires -Version 5.1
 <#
-    Micro-benchmarks behind the project's coding rules, plus an XLSX import timing.
-    Not part of the Pester suite. Run on the PowerShell you deploy to (Windows PowerShell 5.1):
+    Times XLSX import and recipient validation on a generated workbook. Not part of the Pester suite.
+    Run on the PowerShell you deploy to (Windows PowerShell 5.1):
 
         powershell.exe -NoProfile -File .\Tests\Benchmarks.ps1
         powershell.exe -NoProfile -File .\Tests\Benchmarks.ps1 -Rows 20000
-
-    This file deliberately contains the slow idioms it measures ([void], | Out-Null, +=, Where-Object),
-    so the coding-standards test skips it.
 #>
 [CmdletBinding()]
 param(
-    # Size of the generated workbook for the XLSX import timing.
+    # Size of the generated workbook.
     [ValidateRange(100, 200000)]
-    [int]$Rows = 10000,
-
-    # Iterations for the idiom measurements.
-    [ValidateRange(1000, 10000000)]
-    [int]$Iterations = 200000
+    [int]$Rows = 10000
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-function Measure-TbmIdiom {
-    param(
-        [Parameter(Mandatory)][string]$Name,
-        [Parameter(Mandatory)][int]$Count,
-        [Parameter(Mandatory)][scriptblock]$Script
-    )
-    $null = & $Script
-    $best = [double]::MaxValue
-    for ($round = 0; $round -lt 3; $round++) {
-        $watch = [System.Diagnostics.Stopwatch]::StartNew()
-        $null = & $Script
-        $watch.Stop()
-        if ($watch.Elapsed.TotalMilliseconds -lt $best) { $best = $watch.Elapsed.TotalMilliseconds }
-    }
-    $perItem = $best * 1000000 / $Count
-    '{0,-38} {1,10:N1} ms  {2,10:N0} ns/item' -f $Name, $best, $perItem
-}
-
 'PowerShell {0} ({1})' -f $PSVersionTable.PSVersion, $PSVersionTable.PSEdition
-''
-$n = $Iterations
-$small = [System.Math]::Max(1000, [int]($Iterations / 10))
-$list = [System.Collections.Generic.List[int]]::new()
-
-'-- Discarding a return value'
-Measure-TbmIdiom -Name '[void]$list.Add(i)' -Count $n -Script { $list.Clear(); for ($i = 0; $i -lt $n; $i++) { [void]$list.Add($i) } }
-Measure-TbmIdiom -Name '$null = $list.Add(i)' -Count $n -Script { $list.Clear(); for ($i = 0; $i -lt $n; $i++) { $null = $list.Add($i) } }
-Measure-TbmIdiom -Name '$list.Add(i) > $null' -Count $n -Script { $list.Clear(); for ($i = 0; $i -lt $n; $i++) { $list.Add($i) > $null } }
-Measure-TbmIdiom -Name '$list.Add(i) | Out-Null' -Count $small -Script { $list.Clear(); for ($i = 0; $i -lt $small; $i++) { $list.Add($i) | Out-Null } }
-
-''
-'-- Filtering'
-$data = [int[]](1..$n)
-Measure-TbmIdiom -Name '| Where-Object { }' -Count $n -Script { $data | Where-Object { $_ % 2 -eq 0 } }
-Measure-TbmIdiom -Name '.Where({ })' -Count $n -Script { $data.Where({ $_ % 2 -eq 0 }) }
-Measure-TbmIdiom -Name 'foreach + if + List.Add' -Count $n -Script { $kept = [System.Collections.Generic.List[int]]::new(); foreach ($item in $data) { if ($item % 2 -eq 0) { $kept.Add($item) } }; , $kept }
-
-''
-'-- Accumulating'
-Measure-TbmIdiom -Name '$array += item' -Count $small -Script { $array = @(); for ($i = 0; $i -lt $small; $i++) { $array += $i }; , $array }
-Measure-TbmIdiom -Name 'List[int].Add' -Count $small -Script { $items = [System.Collections.Generic.List[int]]::new(); for ($i = 0; $i -lt $small; $i++) { $items.Add($i) }; , $items }
-Measure-TbmIdiom -Name '$string += text' -Count $small -Script { $text = ''; for ($i = 0; $i -lt $small; $i++) { $text += 'x' + $i + ',' }; $text }
-Measure-TbmIdiom -Name 'StringBuilder.Append' -Count $small -Script { $builder = [System.Text.StringBuilder]::new(); for ($i = 0; $i -lt $small; $i++) { $null = $builder.Append('x').Append($i).Append(',') }; $builder.ToString() }
-
-''
-'-- Calling per item'
-function Get-BenchAdvanced { [CmdletBinding()] param([Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$Value) return $Value.Length }
-function Get-BenchSimple { param($Value) $Value.Length }
-Measure-TbmIdiom -Name 'advanced function' -Count $small -Script { for ($i = 0; $i -lt $small; $i++) { $null = Get-BenchAdvanced -Value 'AB12' } }
-Measure-TbmIdiom -Name 'simple function' -Count $small -Script { for ($i = 0; $i -lt $small; $i++) { $null = Get-BenchSimple 'AB12' } }
-Measure-TbmIdiom -Name '.NET static method' -Count $small -Script { for ($i = 0; $i -lt $small; $i++) { $null = [System.String]::IsNullOrEmpty('AB12') } }
-
-''
 '-- XLSX import ({0:N0} rows x 10 columns)' -f $Rows
 $projectRoot = [System.IO.Path]::GetDirectoryName($PSScriptRoot)
 $workRoot = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), 'tbm-bench-' + [guid]::NewGuid().ToString('N'))

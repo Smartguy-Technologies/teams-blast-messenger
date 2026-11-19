@@ -914,27 +914,21 @@ Describe 'Performance helpers' {
 Describe 'Coding standards' {
     BeforeAll {
         $script:SourceFiles = [System.Collections.Generic.List[string]]::new()
-        $script:ScriptFiles = [System.Collections.Generic.List[string]]::new()
         $skip = [System.IO.Path]::DirectorySeparatorChar + '.git' + [System.IO.Path]::DirectorySeparatorChar
         foreach ($file in [System.IO.Directory]::GetFiles($script:ProjectRoot, '*', [System.IO.SearchOption]::AllDirectories)) {
-            if ($file.Contains($skip)) { continue }
-            $script:SourceFiles.Add($file)
-            $extension = [System.IO.Path]::GetExtension($file).ToLowerInvariant()
-            # Benchmarks.ps1 measures the slow idioms on purpose; it is still checked for ASCII.
-            if ([System.IO.Path]::GetFileName($file) -eq 'Benchmarks.ps1') { continue }
-            if ($extension -eq '.ps1' -or $extension -eq '.psm1' -or $extension -eq '.psd1') { $script:ScriptFiles.Add($file) }
+            if (-not $file.Contains($skip)) { $script:SourceFiles.Add($file) }
         }
 
+        # Checks every line of every file (code, comments, docs, XAML, C#). The patterns use character
+        # classes such as [t] so this file never contains the text it searches for.
         function Get-TbmStandardsViolation {
             param([string]$Pattern)
             $found = [System.Collections.Generic.List[string]]::new()
-            $regex = [System.Text.RegularExpressions.Regex]::new($Pattern)
-            foreach ($file in $script:ScriptFiles) {
+            $regex = [System.Text.RegularExpressions.Regex]::new($Pattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+            foreach ($file in $script:SourceFiles) {
                 $lines = [System.IO.File]::ReadAllLines($file)
                 for ($i = 0; $i -lt $lines.Length; $i++) {
-                    $trimmed = $lines[$i].TrimStart()
-                    if ($trimmed.StartsWith('#')) { continue }
-                    if ($regex.IsMatch($lines[$i])) { $found.Add(('{0}:{1}: {2}' -f [System.IO.Path]::GetFileName($file), ($i + 1), $trimmed)) }
+                    if ($regex.IsMatch($lines[$i])) { $found.Add(('{0}:{1}: {2}' -f [System.IO.Path]::GetFileName($file), ($i + 1), $lines[$i].Trim())) }
                 }
             }
             return , $found
@@ -955,14 +949,14 @@ Describe 'Coding standards' {
     }
 
     It 'discards output by assigning to $null, never with a void cast' {
-        Get-TbmStandardsViolation -Pattern '\[void\]' | Should -BeNullOrEmpty
+        Get-TbmStandardsViolation -Pattern '\[voi[d]\]' | Should -BeNullOrEmpty
     }
 
-    It 'does not build strings or arrays with the add-assign operator' {
-        Get-TbmStandardsViolation -Pattern '\+=\s*[''"@(\[]' | Should -BeNullOrEmpty
+    It 'never uses the add-assign operator' {
+        Get-TbmStandardsViolation -Pattern '\+[=]' | Should -BeNullOrEmpty
     }
 
-    It 'does not pipe into Out-Null, ForEach-Object, Where-Object, Select-Object or Sort-Object' {
-        Get-TbmStandardsViolation -Pattern '\|\s*(?:Out-Null|ForEach-Object|Where-Object|Select-Object|Sort-Object|%|\?)(?:\s|$)' | Should -BeNullOrEmpty
+    It 'does not pipe into output, filtering, projection or sorting cmdlets' {
+        Get-TbmStandardsViolation -Pattern '\|\s*(?:Out-Nul[l]|ForEach-Objec[t]|Where-Objec[t]|Select-Objec[t]|Sort-Objec[t]|[%?](?:\s|$))' | Should -BeNullOrEmpty
     }
 }

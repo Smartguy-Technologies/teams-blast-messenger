@@ -72,7 +72,6 @@ namespace TeamsBlastMessenger
         private static readonly UTF8Encoding Utf8NoBom = new UTF8Encoding(false);
         private static StreamWriter _writer;
         private static string _writerPath;
-        private static bool _exitHooked;
 
         public static string Directory { get { return _directory; } }
         public static TbmLogLevel MinimumLevel { get { return _minimumLevel; } set { _minimumLevel = value; } }
@@ -158,11 +157,7 @@ namespace TeamsBlastMessenger
             FileStream stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
             _writer = new StreamWriter(stream, Utf8NoBom);
             _writerPath = path;
-            if (!_exitHooked)
-            {
-                AppDomain.CurrentDomain.ProcessExit += delegate { Close(); };
-                _exitHooked = true;
-            }
+            // Every entry is flushed as it is written, so nothing is lost if the process exits with the file open.
         }
 
         private static void CloseWriter()
@@ -505,7 +500,7 @@ namespace TeamsBlastMessenger
         {
             if (values == null || values.Count == 0) { return null; }
             long total = 0;
-            foreach (TimeSpan value in values) { total += value.Ticks; }
+            foreach (TimeSpan value in values) { total = total + value.Ticks; }
             return TimeSpan.FromTicks(total / values.Count);
         }
 

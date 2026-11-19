@@ -266,7 +266,7 @@ Private\History.ps1             history store, journal, CSV export
 Private\Interactions.ps1        reply discovery and statistics
 Private\Ui*.ps1, Public\        WPF windows (XAML in Xaml\)
 Policy\                         Group Policy ADMX/ADML templates and an example .reg
-Tests\                          Pester tests for the non-UI logic; Benchmarks.ps1 (timings, not run by Pester)
+Tests\                          Pester tests for the non-UI logic; Benchmarks.ps1 (import timings, not run by Pester)
 ```
 
 Run the tests (Pester 5+):
@@ -275,9 +275,9 @@ Run the tests (Pester 5+):
 Invoke-Pester -Path .\Tests
 ```
 
-The tests also check the coding rules: every file is ASCII, output is discarded with `$null =` (not `[void]`), strings and arrays are never built with `+=`, and nothing is piped into `Out-Null`, `ForEach-Object`, `Where-Object`, `Select-Object` or `Sort-Object`.
+The tests also check the coding rules in every file: ASCII only, output discarded by assigning to `$null`, collections and strings built with `List[T]` / `StringBuilder` (never the add-assign operator), no void casts, and no pipelines into filtering or output cmdlets (`foreach` loops and .NET methods instead).
 
-To see the measurements behind these rules, and the XLSX import time, on your own PowerShell:
+To time XLSX import and recipient validation on your own PowerShell:
 
 ```powershell
 powershell.exe -NoProfile -File .\Tests\Benchmarks.ps1

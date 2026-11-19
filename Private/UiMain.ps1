@@ -405,7 +405,7 @@ function Add-TbmManualRecipientsFromUi {
     finally {
         $ui.Suppress = $previous
     }
-    $ui.ManualCount += $result.Added
+    $ui.ManualCount = $ui.ManualCount + $result.Added
     $baseLabel = $ui.SourceFile
     if ([string]::IsNullOrEmpty($baseLabel)) { $baseLabel = 'Entered manually' }
     $ui.SourceLabel = '{0} + {1} added manually' -f $baseLabel, $ui.ManualCount

@@ -459,7 +459,7 @@ function Show-TbmDeviceCodeWindow {
                     $deviceView.Success = $true
                     $deviceView.Ui.Window.DialogResult = $true
                 }
-                'SlowDown' { $deviceView.Interval += 5 }
+                'SlowDown' { $deviceView.Interval = $deviceView.Interval + 5 }
             }
             $deviceView.NextPoll = [datetime]::UtcNow.AddSeconds($deviceView.Interval)
         }
